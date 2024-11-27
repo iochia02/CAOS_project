@@ -24,32 +24,32 @@
  *   https://developer.arm.com/products/system-design/development-boards/cortex-m-prototyping-system
  */
 
-#include "qemu/osdep.h"
-#include "qemu/units.h"
-#include "qemu/cutils.h"
-#include "qapi/error.h"
-#include "qemu/error-report.h"
-#include "hw/arm/boot.h"
-#include "hw/arm/armv7m.h"
-#include "hw/or-irq.h"
-#include "hw/boards.h"
-#include "exec/address-spaces.h"
-#include "sysemu/sysemu.h"
-#include "hw/qdev-properties.h"
-#include "hw/misc/unimp.h"
-#include "hw/char/cmsdk-apb-uart.h"
-#include "hw/timer/cmsdk-apb-timer.h"
-#include "hw/timer/cmsdk-apb-dualtimer.h"
-#include "hw/misc/mps2-scc.h"
-#include "hw/misc/mps2-fpgaio.h"
-#include "hw/ssi/pl022.h"
-#include "hw/i2c/arm_sbcon_i2c.h"
-#include "hw/net/lan9118.h"
-#include "net/net.h"
-#include "hw/watchdog/cmsdk-apb-watchdog.h"
-#include "hw/qdev-clock.h"
-#include "qapi/qmp/qlist.h"
-#include "qom/object.h"
+#include "qemu/osdep.h" // Pull in some common system headers that most code in QEMU will want
+#include "qemu/units.h" // Simply defines KiB, MiB
+#include "qemu/cutils.h" // Defines some function about strings
+#include "qapi/error.h" // Error reporting system loosely patterned after Glib's GError.
+#include "qemu/error-report.h" // error reporting
+#include "hw/arm/boot.h" // ARM kernel loader.
+#include "hw/arm/armv7m.h" // ARMv7M CPU object
+#include "hw/or-irq.h" // for interrupt reqest
+#include "hw/boards.h" //  Declarations for use by board files for creating devices (e.g machine_type_name)
+#include "exec/address-spaces.h" //  Internal memory management interfaces
+#include "sysemu/sysemu.h" // Misc. things related to the system emulator.
+#include "hw/qdev-properties.h" // Define device properties
+#include "hw/misc/unimp.h" // create_unimplemented_device
+#include "hw/char/cmsdk-apb-uart.h" // This is a model of the "APB UART" which is part of the Cortex-M System Design Kit
+#include "hw/timer/cmsdk-apb-timer.h" // This is a model of the "APB timer" which is part of the Cortex-M System Design Kit
+#include "hw/timer/cmsdk-apb-dualtimer.h" // This is a model of the "APB dual-input timer" which is part of the Cortex-M System Design Kit
+#include "hw/misc/mps2-scc.h" // ARM MPS2 SCC emulation
+#include "hw/misc/mps2-fpgaio.h" // ARM MPS2 FPGAIO emulation
+#include "hw/ssi/pl022.h" // Arm PrimeCell PL022 Synchronous Serial Port
+#include "hw/i2c/arm_sbcon_i2c.h" // ARM Versatile I2C controller
+#include "hw/net/lan9118.h" // SMSC LAN9118 Ethernet interface emulation
+#include "net/net.h" // Net configurations (clients, sockets,...)
+#include "hw/watchdog/cmsdk-apb-watchdog.h" // This is a model of the "APB watchdog" which is part of the Cortex-M System Design Kit
+#include "hw/qdev-clock.h" // Device's clock input and output
+#include "qapi/qmp/qlist.h" // QList Module (provides dynamic arrays)
+#include "qom/object.h" // QEMU Object Model
 
 
 struct S32K3MachineState {
