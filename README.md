@@ -59,9 +59,9 @@ make install
 ```
 
 ## Test the application
-Now we can test FreeRTOS on our custom machine, using the application in `Demo`: simply try to run `make` and `make qemu_start`. This application simply creates two tasks that print `Hello world` on screen.
+Now we can test FreeRTOS on our custom machine, using the application in `Demo`: simply try to run `make` and `make qemu_start`. This application creates three timers that use timers.
 
 **N.B. Remember to put the correct directory for your FreeRTOS folder in the Makefile**
 
 ## What's next
-We still need to implement uart and timers. Now the uart is working because we're using the uart already implemented for the mps2 board, but that doesn't model our machine 😢.
+We still need to implement uart. Now the uart is working because we're using the uart already implemented for the mps2 board, but that doesn't model our machine 😢.

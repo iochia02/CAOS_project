@@ -75,6 +75,8 @@
 #define configUSE_TASK_NOTIFICATIONS             1
 #define configTASK_NOTIFICATION_ARRAY_ENTRIES    3
 
+#define configSUPPORT_DYNAMIC_ALLOCATION		 1
+
 /* Set the following definitions to 1 to include the API function, or zero
  * to exclude the API function. */
 

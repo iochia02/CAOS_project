@@ -1,3 +1,9 @@
+# FreeRTOS application Makefile.
+
+# SPDX-License-Identifier: CC-BY-NC-4.0
+# Copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
+
+
 # The directory that contains FreeRTOS source code
 FREERTOS_ROOT := /home/debian/FreeRTOS/FreeRTOS
 
@@ -23,6 +29,7 @@ SIZE := arm-none-eabi-size
 
 # Binary file of qemu built with s32k358 machine
 QEMU := /opt/qemu-5.2.0/bin/qemu-system-arm
+QEMU_EXTRA := -d unimp -d guest_errors
 
 # Target embedded board and CPU
 MACHINE := s32k358
@@ -101,6 +108,7 @@ LDFLAGS += -mfpu=fpv5-sp-d16 -mfloat-abi=hard
 # Kernel files
 SOURCE_FILES += $(KERNEL_DIR)/list.c
 SOURCE_FILES += $(KERNEL_DIR)/tasks.c
+SOURCE_FILES += $(KERNEL_DIR)/queue.c
 SOURCE_FILES += $(KERNEL_DIR)/portable/MemMang/heap_4.c
 # Use the gcc for arm-cortex-m7
 SOURCE_FILES += $(KERNEL_DIR)/portable/GCC/ARM_CM7/r0p1/port.c
@@ -108,6 +116,7 @@ SOURCE_FILES += $(KERNEL_DIR)/portable/GCC/ARM_CM7/r0p1/port.c
 # Demo files
 SOURCE_FILES += $(DEMO_PROJECT)/main.c
 SOURCE_FILES += $(DEMO_PROJECT)/uart.c
+SOURCE_FILES += $(DEMO_PROJECT)/IntTimer.c
 
 # Start-up code
 SOURCE_FILES += ./startup.c
@@ -142,11 +151,14 @@ clean:
 
 qemu_start:
 	$(QEMU) -machine $(MACHINE) -cpu $(CPU) -kernel \
-	$(ELF) -monitor none -nographic -serial stdio
+	$(ELF) -monitor unix:qemu-monitor-socket,server,nowait -nographic -serial stdio $(QEMU_EXTRA)
+
+qemu_start_console:
+	$(QEMU) -machine $(MACHINE) -cpu $(CPU) -S -nographic
 
 qemu_debug:
 	$(QEMU) -machine $(MACHINE) -cpu $(CPU) -kernel \
-	$(ELF) -monitor none -nographic -serial stdio $(QEMU_FLAGS_DBG)
+	$(ELF) -monitor none -nographic -serial stdio $(QEMU_EXTRA) $(QEMU_FLAGS_DBG)
 
 gdb_start:
 	gdb-multiarch -ex "target remote localhost:1234" $(ELF)
