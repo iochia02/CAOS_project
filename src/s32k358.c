@@ -1,12 +1,9 @@
 /*
  * ARM s32k358 board emulation.
  *
- * Copyright (c) 2017 Linaro Limited
- * Written by Peter Maydell
+ * SPDX-License-Identifier: CC-BY-NC-4.0
+ * Copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
  *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License version 2 or
- *  (at your option) any later version.
  */
 
 #include "qemu/osdep.h" // Pull in some common system headers that most code in QEMU will want
@@ -22,9 +19,7 @@
 #include "sysemu/sysemu.h" // Misc. things related to the system emulator.
 #include "hw/qdev-properties.h" // Define device properties
 #include "hw/misc/unimp.h" // create_unimplemented_device
-#include "hw/char/cmsdk-apb-uart.h" // This is a model of the "APB UART" which is part of the Cortex-M System Design Kit
-#include "hw/timer/cmsdk-apb-timer.h" // This is a model of the "APB timer" which is part of the Cortex-M System Design Kit
-#include "hw/timer/cmsdk-apb-dualtimer.h" // This is a model of the "APB dual-input timer" which is part of the Cortex-M System Design Kit
+#include "hw/char/s32k358_uart.h"
 #include "hw/misc/mps2-scc.h" // ARM MPS2 SCC emulation
 #include "hw/misc/mps2-fpgaio.h" // ARM MPS2 FPGAIO emulation
 #include "hw/ssi/pl022.h" // Arm PrimeCell PL022 Synchronous Serial Port
@@ -35,8 +30,9 @@
 #include "hw/qdev-clock.h" // Device's clock input and output
 #include "qapi/qmp/qlist.h" // QList Module (provides dynamic arrays)
 #include "qom/object.h" // QEMU Object Model
+#include "hw/timer/s32k358_timer.h"
 
-// Data types representing our machine
+// Data types representing the machine
 struct S32K358MachineClass {
     MachineClass parent;
 };
@@ -55,12 +51,7 @@ struct S32K358MachineState {
     MemoryRegion sram0; // RAM
     MemoryRegion sram1;
     MemoryRegion sram2;
-    /*
-     * When we'll have timers we adapt and decomment it
-     * CMSDKAPBDualTimer dualtimer;
-     * CMSDKAPBWatchdog watchdog;
-     * CMSDKAPBTimer timer[2];
-    */
+    S32K358Timer timer[3];
     Clock *sysclk; // Clock
     Clock *refclk;
 };
@@ -141,87 +132,47 @@ static void s32k358_init(MachineState *machine)
                              OBJECT(system_memory), &error_abort);
     sysbus_realize(SYS_BUS_DEVICE(&mms->armv7m), &error_fatal);
 
+    // UART
+    static const hwaddr uartbase[] = {0x40328000, 0x4032C000, 0x40330000, 0x40334000,
+                                        0x40338000, 0x4033C000, 0x40340000, 0x40344000,
+                                        0x4048C000, 0x40490000, 0x40494000, 0x40498000,
+                                        0x4049C000, 0x404A0000, 0x404A4000, 0X404A8000
+                                        };
+    static const int uartirq_base = 141;
 
-    /* The overflow IRQs for UARTs 0, 1 and 2 are ORed together.
-    * Overflow for UARTs 4 and 5 doesn't trigger any interrupt.
-    */
 
-    // This is the logic used to implement this type of uart
-    // Probably we won't need it
-    Object *orgate;
-    DeviceState *orgate_dev;
-
-    orgate = object_new(TYPE_OR_IRQ);
-    object_property_set_int(orgate, "num-lines", 6, &error_fatal);
-    qdev_realize(DEVICE(orgate), NULL, &error_fatal);
-    orgate_dev = DEVICE(orgate);
-    qdev_connect_gpio_out(orgate_dev, 0, qdev_get_gpio_in(armv7m, 12));
-
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < 16; i++) {
         DeviceState *dev;
         SysBusDevice *s;
 
-        // This addresses and irq are correct, but we should implement the right type of uart
-        static const hwaddr uartbase[] = {0x40328000, 0x4032C000,
-                                            0x40330000, 0x40334000
-                                            };
-        static const int uartirq[] = {141, 142, 143, 144};
-        qemu_irq txovrint = NULL, rxovrint = NULL;
-
-        if (i < 3) {
-            txovrint = qdev_get_gpio_in(orgate_dev, i * 2);
-            rxovrint = qdev_get_gpio_in(orgate_dev, i * 2 + 1);
-        }
-
-        dev = qdev_new(TYPE_CMSDK_APB_UART);
+        dev = qdev_new(TYPE_S32K358_LPUART);
         s = SYS_BUS_DEVICE(dev);
         qdev_prop_set_chr(dev, "chardev", serial_hd(i));
         qdev_prop_set_uint32(dev, "pclk-frq", SYSCLK_FRQ);
+        qdev_prop_set_uint32(dev, "id", i);
         sysbus_realize_and_unref(s, &error_fatal);
         sysbus_mmio_map(s, 0, uartbase[i]);
-        sysbus_connect_irq(s, 0, qdev_get_gpio_in(armv7m, uartirq[i]));
-        sysbus_connect_irq(s, 1, qdev_get_gpio_in(armv7m, uartirq[i]));
-        sysbus_connect_irq(s, 2, txovrint);
-        sysbus_connect_irq(s, 3, rxovrint);
+        sysbus_connect_irq(s, 0, qdev_get_gpio_in(armv7m, uartirq_base + i));
     }
 
-    /*for (i = 0; i < 4; i++) {
-        static const hwaddr gpiobase[] = {0x40010000, 0x40011000,
-                                          0x40012000, 0x40013000};
-        create_unimplemented_device("cmsdk-ahb-gpio", gpiobase[i], 0x1000);
-    }
-*/
-    // Timers we'll be implemented here
-    /* CMSDK APB subsystem
+    // Timers - refer to page 2816 of the manual (68.7.1)
+    static const hwaddr timerbase[] = {0x400B0000, 0x400B4000, 0x402FC000};
+    // irq from the s32kxxrm interrupt map
+    int irqno[] = {96, 97, 98};
+
+    // Create the timers and connect them
     for (i = 0; i < ARRAY_SIZE(mms->timer); i++) {
         g_autofree char *name = g_strdup_printf("timer%d", i);
-        hwaddr base = 0x40000000 + i * 0x1000;
-        int irqno = 8 + i;
         SysBusDevice *sbd;
 
         object_initialize_child(OBJECT(mms), name, &mms->timer[i],
-                                TYPE_CMSDK_APB_TIMER);
+                                TYPE_S32K358_TIMER);
         sbd = SYS_BUS_DEVICE(&mms->timer[i]);
         qdev_connect_clock_in(DEVICE(&mms->timer[i]), "pclk", mms->sysclk);
         sysbus_realize_and_unref(sbd, &error_fatal);
-        sysbus_mmio_map(sbd, 0, base);
-        sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(armv7m, irqno));
+        sysbus_mmio_map(sbd, 0, timerbase[i]);
+        sysbus_connect_irq(sbd, 0, qdev_get_gpio_in(armv7m, irqno[i]));
     }
-
-    object_initialize_child(OBJECT(mms), "dualtimer", &mms->dualtimer,
-                            TYPE_CMSDK_APB_DUALTIMER);
-    qdev_connect_clock_in(DEVICE(&mms->dualtimer), "TIMCLK", mms->sysclk);
-    sysbus_realize(SYS_BUS_DEVICE(&mms->dualtimer), &error_fatal);
-    sysbus_connect_irq(SYS_BUS_DEVICE(&mms->dualtimer), 0,
-                       qdev_get_gpio_in(armv7m, 10));
-    sysbus_mmio_map(SYS_BUS_DEVICE(&mms->dualtimer), 0, 0x40002000);
-    object_initialize_child(OBJECT(mms), "watchdog", &mms->watchdog,
-                            TYPE_CMSDK_APB_WATCHDOG);
-    qdev_connect_clock_in(DEVICE(&mms->watchdog), "WDOGCLK", mms->sysclk);
-    sysbus_realize(SYS_BUS_DEVICE(&mms->watchdog), &error_fatal);
-    sysbus_connect_irq(SYS_BUS_DEVICE(&mms->watchdog), 0,
-                       qdev_get_gpio_in_named(armv7m, "NMI", 0));
-    sysbus_mmio_map(SYS_BUS_DEVICE(&mms->watchdog), 0, 0x40008000);*/
 
     // Address from which load the kernel
     // The address specified here is usually not used

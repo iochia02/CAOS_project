@@ -9,10 +9,10 @@ index 31f77c2026..096d5ee246 100644
 +
 +CONFIG_S32K358=y
 diff --git a/hw/arm/Kconfig b/hw/arm/Kconfig
-index 1ad60da7aa..fac618652e 100644
+index 1ad60da7aa..07ce612521 100644
 --- a/hw/arm/Kconfig
 +++ b/hw/arm/Kconfig
-@@ -712,3 +712,17 @@ config ARMSSE
+@@ -712,3 +712,18 @@ config ARMSSE
      select UNIMP
      select SSE_COUNTER
      select SSE_TIMER
@@ -29,6 +29,7 @@ index 1ad60da7aa..fac618652e 100644
 +    select SPLIT_IRQ
 +    select UNIMP
 +    select S32K358_TIMER
++    select S32K358_UART
 +    select CMSDK_APB_WATCHDOG
 diff --git a/hw/arm/meson.build b/hw/arm/meson.build
 index 0c07ab522f..ea82ee5967 100644
@@ -43,10 +44,10 @@ index 0c07ab522f..ea82ee5967 100644
  hw_arch += {'arm': arm_ss}
 diff --git a/hw/arm/s32k358.c b/hw/arm/s32k358.c
 new file mode 100644
-index 0000000000..5a97c5d858
+index 0000000000..5f7d7b8b8c
 --- /dev/null
 +++ b/hw/arm/s32k358.c
-@@ -0,0 +1,229 @@
+@@ -0,0 +1,208 @@
 +/*
 + * ARM s32k358 board emulation.
 + *
@@ -68,7 +69,7 @@ index 0000000000..5a97c5d858
 +#include "sysemu/sysemu.h" // Misc. things related to the system emulator.
 +#include "hw/qdev-properties.h" // Define device properties
 +#include "hw/misc/unimp.h" // create_unimplemented_device
-+#include "hw/char/cmsdk-apb-uart.h" // This is a model of the "APB UART" which is part of the Cortex-M System Design Kit
++#include "hw/char/s32k358_uart.h"
 +#include "hw/misc/mps2-scc.h" // ARM MPS2 SCC emulation
 +#include "hw/misc/mps2-fpgaio.h" // ARM MPS2 FPGAIO emulation
 +#include "hw/ssi/pl022.h" // Arm PrimeCell PL022 Synchronous Serial Port
@@ -181,48 +182,27 @@ index 0000000000..5a97c5d858
 +                             OBJECT(system_memory), &error_abort);
 +    sysbus_realize(SYS_BUS_DEVICE(&mms->armv7m), &error_fatal);
 +
++    // UART
++    static const hwaddr uartbase[] = {0x40328000, 0x4032C000, 0x40330000, 0x40334000,
++                                        0x40338000, 0x4033C000, 0x40340000, 0x40344000,
++                                        0x4048C000, 0x40490000, 0x40494000, 0x40498000,
++                                        0x4049C000, 0x404A0000, 0x404A4000, 0X404A8000
++                                        };
++    static const int uartirq_base = 141;
 +
-+    /* The overflow IRQs for UARTs 0, 1 and 2 are ORed together.
-+    * Overflow for UARTs 4 and 5 doesn't trigger any interrupt.
-+    */
 +
-+    // This is the logic used to implement this type of uart
-+    // Probably we won't need it
-+    Object *orgate;
-+    DeviceState *orgate_dev;
-+
-+    orgate = object_new(TYPE_OR_IRQ);
-+    object_property_set_int(orgate, "num-lines", 6, &error_fatal);
-+    qdev_realize(DEVICE(orgate), NULL, &error_fatal);
-+    orgate_dev = DEVICE(orgate);
-+    qdev_connect_gpio_out(orgate_dev, 0, qdev_get_gpio_in(armv7m, 12));
-+
-+    for (i = 0; i < 4; i++) {
++    for (i = 0; i < 16; i++) {
 +        DeviceState *dev;
 +        SysBusDevice *s;
 +
-+        // This addresses and irq are correct, but we should implement the right type of uart
-+        static const hwaddr uartbase[] = {0x40328000, 0x4032C000,
-+                                            0x40330000, 0x40334000
-+                                            };
-+        static const int uartirq[] = {141, 142, 143, 144};
-+        qemu_irq txovrint = NULL, rxovrint = NULL;
-+
-+        if (i < 3) {
-+            txovrint = qdev_get_gpio_in(orgate_dev, i * 2);
-+            rxovrint = qdev_get_gpio_in(orgate_dev, i * 2 + 1);
-+        }
-+
-+        dev = qdev_new(TYPE_CMSDK_APB_UART);
++        dev = qdev_new(TYPE_S32K358_LPUART);
 +        s = SYS_BUS_DEVICE(dev);
 +        qdev_prop_set_chr(dev, "chardev", serial_hd(i));
 +        qdev_prop_set_uint32(dev, "pclk-frq", SYSCLK_FRQ);
++        qdev_prop_set_uint32(dev, "id", i);
 +        sysbus_realize_and_unref(s, &error_fatal);
 +        sysbus_mmio_map(s, 0, uartbase[i]);
-+        sysbus_connect_irq(s, 0, qdev_get_gpio_in(armv7m, uartirq[i]));
-+        sysbus_connect_irq(s, 1, qdev_get_gpio_in(armv7m, uartirq[i]));
-+        sysbus_connect_irq(s, 2, txovrint);
-+        sysbus_connect_irq(s, 3, rxovrint);
++        sysbus_connect_irq(s, 0, qdev_get_gpio_in(armv7m, uartirq_base + i));
 +    }
 +
 +    // Timers - refer to page 2816 of the manual (68.7.1)
@@ -276,6 +256,665 @@ index 0000000000..5a97c5d858
 +}
 +
 +type_init(s32k358_machine_init);
+diff --git a/hw/char/Kconfig b/hw/char/Kconfig
+index 4fd74ea878..3ae728d677 100644
+--- a/hw/char/Kconfig
++++ b/hw/char/Kconfig
+@@ -74,3 +74,6 @@ config GOLDFISH_TTY
+ 
+ config SHAKTI_UART
+     bool
++
++config S32K358_UART
++    bool
+diff --git a/hw/char/meson.build b/hw/char/meson.build
+index e5b13b6958..517d802f5d 100644
+--- a/hw/char/meson.build
++++ b/hw/char/meson.build
+@@ -39,3 +39,5 @@ system_ss.add(when: 'CONFIG_GOLDFISH_TTY', if_true: files('goldfish_tty.c'))
+ specific_ss.add(when: 'CONFIG_TERMINAL3270', if_true: files('terminal3270.c'))
+ specific_ss.add(when: 'CONFIG_VIRTIO', if_true: files('virtio-serial-bus.c'))
+ specific_ss.add(when: 'CONFIG_PSERIES', if_true: files('spapr_vty.c'))
++
++specific_ss.add(when: 'CONFIG_S32K358_UART', if_true: files('s32k358_uart.c'))
+diff --git a/hw/char/s32k358_uart.c b/hw/char/s32k358_uart.c
+new file mode 100644
+index 0000000000..b4ea414875
+--- /dev/null
++++ b/hw/char/s32k358_uart.c
+@@ -0,0 +1,632 @@
++/*
++  * S32K358 LPUART emulation
++ *
++ * SPDX-License-Identifier: CC-BY-NC-4.0
++ * Copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
++ *
++ */
++
++#include "qemu/osdep.h"
++#include "qemu/log.h"
++#include "qemu/module.h"
++#include "qapi/error.h"
++#include "trace.h"
++#include "hw/sysbus.h"
++#include "migration/vmstate.h"
++#include "hw/registerfields.h"
++#include "chardev/char-fe.h"
++#include "chardev/char-serial.h"
++#include "hw/char/s32k358_uart.h"
++#include "hw/irq.h"
++#include "hw/qdev-properties-system.h"
++
++REG32(VERID, 0x0)
++REG32(PARAM, 0x4)
++REG32(GLOBAL, 0x8)
++    FIELD(GLOBAL, RST, 1, 1)
++REG32(BAUD, 0x10)
++    FIELD(BAUD, SBR, 0, 13)
++    FIELD(BAUD, SBNS, 13, 1)
++    FIELD(BAUD, BOTHEDGE, 17, 1)
++    FIELD(BAUD, OSR, 24, 5)
++REG32(STAT, 0x14)
++    FIELD(STAT, RDRF, 21, 1)
++    FIELD(STAT, TC, 22, 1)
++    FIELD(STAT, TDRE, 23, 1)
++REG32(CTRL, 0x18)
++    FIELD(CTRL, PT, 0, 1)
++    FIELD(CTRL, PE, 1, 1)
++    FIELD(CTRL, RE, 18, 1)
++    FIELD(CTRL, TE, 19, 1)
++    FIELD(CTRL, RIE, 21, 1)
++    FIELD(CTRL, TCIE, 22, 1)
++    FIELD(CTRL, TIE, 23, 1)
++REG32(DATA, 0x1C)
++    FIELD(DATA, R07T07, 0, 8)
++REG32(FIFO, 0x28)
++    FIELD(FIFO, RXFIFOSIZE, 0, 3)
++    FIELD(FIFO, RXFE, 3, 1)
++    FIELD(FIFO, TXFIFOSIZE, 4, 3)
++    FIELD(FIFO, TXFE, 7, 1)
++    FIELD(FIFO, RXUFE, 8, 1)
++    FIELD(FIFO, TXOFE, 9, 1)
++    FIELD(FIFO, RXFLUSH, 14, 1)
++    FIELD(FIFO, TXFLUSH, 15, 1)
++    FIELD(FIFO, RXUF, 16, 1)
++    FIELD(FIFO, TXOF, 17, 1)
++    FIELD(FIFO, RXEMPT, 22, 1)
++    FIELD(FIFO, TXEMPT, 23, 1)
++REG32(WATER, 0x2C)
++    FIELD(WATER, TXWATER, 0, 4)
++    FIELD(WATER, TXWATER_SHORT, 0, 2)
++    FIELD(WATER, TXCOUNT, 8, 5)
++    FIELD(WATER, RXWATER, 16, 4)
++    FIELD(WATER, RXWATER_SHORT, 16, 2)
++    FIELD(WATER, RXCOUNT, 24, 5)
++
++static void lpuart_update_parameters(S32K358LPUART *s)
++{
++    QEMUSerialSetParams ssp;
++
++    uint8_t osr = (s->baud & R_BAUD_OSR_MASK) >> R_BAUD_OSR_SHIFT;
++
++    if (!osr)
++        osr = 15;
++
++    // Configure the parity bit
++    if (s->ctrl & R_CTRL_PE_MASK) {
++        if (s->ctrl & R_CTRL_PT_MASK) {
++            ssp.parity = 'O';
++        } else {
++            ssp.parity = 'E';
++        }
++    } else {
++        ssp.parity = 'N';
++    }
++
++    // By default, the data size is always 8
++    ssp.data_bits = 8;
++
++    // Configure one or two stop bits
++    if (!(s->baud & R_BAUD_SBNS_MASK))
++        ssp.stop_bits = 1;
++    else
++        ssp.stop_bits = 2;
++
++    // Configure the baud rate
++    // Computation at page 4618: baud_rate = clock / ((OSR+1) * SBR)
++    if ((s->baud & R_BAUD_SBR_MASK))
++        ssp.speed = s->pclk_frq / ((((s->baud & R_BAUD_OSR_MASK) >> R_BAUD_OSR_SHIFT) + 1) * (s->baud & R_BAUD_SBR_MASK));
++    else
++        ssp.speed = s->pclk_frq;
++
++    qemu_chr_fe_ioctl(&s->chr, CHR_IOCTL_SERIAL_SET_PARAMS, &ssp);
++}
++
++static void lpuart_update_watermark(S32K358LPUART *s)
++{
++    if (s->tx_fifo_written > s->tx_fifo_watermark)
++        s->stat &= ~R_STAT_TDRE_MASK;
++    else
++        s->stat |= R_STAT_TDRE_MASK;
++
++    if (s->rx_fifo_written > s->rx_fifo_watermark)
++        s->stat |= R_STAT_RDRF_MASK;
++    else
++        s->stat &= ~R_STAT_RDRF_MASK;
++}
++
++static void lpuart_update_irq(S32K358LPUART *s)
++{
++    if (((s->ctrl & R_CTRL_TIE_MASK) && (s->stat & R_STAT_TDRE_MASK)) || // there is room in the transmit FIFO to write another transmit character to Data
++        ((s->ctrl & R_CTRL_TCIE_MASK) && (s->stat & R_STAT_TC_MASK)) || // the transmitter is finished transmitting all data and is idle
++        ((s->ctrl & R_CTRL_RIE_MASK) && (s->stat & R_STAT_RDRF_MASK)) || // the receive FIFO level is greater than the watermark
++        ((s->fifo & R_FIFO_TXOFE_MASK) && (s->fifo & R_FIFO_TXOF_MASK)) || // transmitter FIFO overflow
++        ((s->fifo & R_FIFO_RXUFE_MASK) && (s->fifo & R_FIFO_RXUF_MASK))) // receiver FIFO underflow
++         qemu_set_irq(s->uartint, 1);
++
++    else
++        qemu_set_irq(s->uartint, 0);
++}
++
++static void lpuart_reset(DeviceState *dev)
++{
++    S32K358LPUART *s = S32K358_LPUART(dev);
++
++    // reset values for lpuart0 and lpuart1
++    if (s->id < 2) {
++        s->verid = 0x04040007;
++        s->param = 0x00000404;
++        s->fifo = 0x00C00033;
++    } else { // reset values for lpuart2 ... lpuart15
++        s->verid = 0x04040003;
++        s->param = 0x00000202;
++        s->fifo = 0x00C00011;
++    }
++    s->global = 0;
++    s->baud = 0x0F000004;
++    s->stat = 0x00C00000;
++    s->ctrl = 0;
++    s->data = 0x00001000;
++    s->tx_fifo_written = 0;
++    s->rx_fifo_written = 0;
++    s->rx_fifo_watermark = 0;
++    s->tx_fifo_watermark = 0;
++    // Fifo is disabled
++    s->tx_fifo_size = 1;
++    s->rx_fifo_size = 1;
++
++    lpuart_update_parameters(s);
++    lpuart_update_irq(s);
++}
++
++static int lpuart_can_receive(void *opaque)
++{
++    S32K358LPUART *s = S32K358_LPUART(opaque);
++
++    // Check that the receiver is enabled
++    if (!(s->ctrl & R_CTRL_RE_MASK))
++        return 0;
++
++    // Returns the amount of data that the frontend can receive
++    return s->rx_fifo_size - s->rx_fifo_written;
++}
++
++static void lpuart_receive(void *opaque, const uint8_t *buf, int size)
++{
++    S32K358LPUART *s = S32K358_LPUART(opaque);
++
++    /* In fact lpuart_can_receive() ensures that we can't be
++      * called unless RX is enabled and the buffer is empty,
++      * but we include this logic as documentation of what the
++      * hardware does if a character arrives in these circumstances.
++      */
++    if (!(s->ctrl & R_CTRL_RE_MASK)) {
++        // Just drop the character on the floor
++        return;
++    }
++
++    memcpy(s->rx_fifo + s->rx_fifo_written, buf, 1);
++    s->rx_fifo_written++;
++    // the receive fifo is no more empty
++    s->fifo &= ~R_FIFO_RXEMPT_MASK;
++
++    lpuart_update_watermark(s);
++    lpuart_update_irq(s);
++}
++
++static void lpuart_read_rx_fifo(S32K358LPUART *s) {
++    if (s->rx_fifo_written == 0) {
++        s->fifo |= R_FIFO_RXUF_MASK;
++        lpuart_update_irq(s);
++        return;
++    }
++
++    s->data &= ~R_DATA_R07T07_MASK;
++    s->data |= s->rx_fifo[0];
++    s->rx_fifo_written--;
++    if (s->rx_fifo_written == 0)
++        s->fifo |= R_FIFO_RXEMPT_MASK;
++    else
++        memmove(s->rx_fifo, s->rx_fifo + 1, s->rx_fifo_written);
++
++    lpuart_update_watermark(s);
++    lpuart_update_irq(s);
++}
++
++static uint64_t lpuart_read(void *opaque, hwaddr offset, unsigned size)
++{
++    S32K358LPUART *s = S32K358_LPUART(opaque);
++    uint64_t r;
++
++    switch (offset) {
++    case A_BAUD:
++        r = s->baud;
++        break;
++    case A_CTRL:
++        r = s->ctrl;
++        break;
++    case A_DATA:
++        lpuart_read_rx_fifo(s);
++        r = s->data;
++        break;
++    case A_FIFO:
++        r = s->fifo;
++        break;
++    case A_GLOBAL:
++        r = s->global;
++        break;
++    case A_PARAM:
++        r = s->param;
++        break;
++    case A_STAT:
++        r = s->stat;
++        break;
++    case A_VERID:
++        r = s->verid;
++        break;
++    case A_WATER:
++        r = ((s->rx_fifo_written) << R_WATER_RXCOUNT_SHIFT) | ((s->rx_fifo_watermark) << R_WATER_RXWATER_SHIFT) |
++                ((s->tx_fifo_written) << R_WATER_TXCOUNT_SHIFT) | ((s->tx_fifo_watermark) << R_WATER_TXWATER_SHIFT);
++        break;
++    default:
++        qemu_log_mask(LOG_GUEST_ERROR,
++                      "s32k358 LPUART read: bad offset %x\n", (int) offset);
++        r = 0;
++        break;
++    }
++
++    return r;
++}
++
++/* Try to send tx data, and arrange to be called back later if
++ * we can't (ie the char backend is busy/blocking).
++ */
++static gboolean lpuart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
++{
++    S32K358LPUART *s = S32K358_LPUART(opaque);
++    int ret;
++
++    /* instant drain the fifo when there's no back-end */
++    if (!qemu_chr_fe_backend_connected(&s->chr)) {
++        s->tx_fifo_written = 0;
++        return G_SOURCE_REMOVE;
++    }
++
++    // Verify that the transmitter is enabled
++    if (!(s->ctrl & R_CTRL_TE_MASK)) {
++        return G_SOURCE_REMOVE;
++    }
++
++    // Verify that there is something to transmit
++    if (s->fifo & R_FIFO_TXEMPT_MASK) {
++        return G_SOURCE_REMOVE;
++    }
++
++    // Transmission from front-end to back-enc
++    ret = qemu_chr_fe_write(&s->chr, s->tx_fifo, s->tx_fifo_written);
++
++    // Update the number of elements in the fifo and shift the fifo
++    if (ret >= 0) {
++        s->tx_fifo_written -= ret;
++        memmove(s->tx_fifo, s->tx_fifo + ret, s->tx_fifo_written);
++    }
++
++    // If there are still elements in the fifo, try to retransmit
++    if (s->tx_fifo_written) {
++        guint r = qemu_chr_fe_add_watch(&s->chr, G_IO_OUT | G_IO_HUP,
++                                        lpuart_transmit, s);
++        if (!r) {
++            s->tx_fifo_written = 0;
++            return G_SOURCE_REMOVE;
++        }
++    } else {
++        // There are no more elements in the fifo
++        // Transmission ended
++        s->stat |= R_STAT_TC_MASK;
++        // Fifo empty
++        s->fifo |= R_FIFO_TXEMPT_MASK;
++    }
++
++    lpuart_update_watermark(s);
++    lpuart_update_irq(s);
++
++    return G_SOURCE_REMOVE;
++}
++
++static void lpuart_write_tx_fifo(S32K358LPUART *s) {
++    // if the transmitter is not enabled, return
++    if (!(s->ctrl & R_CTRL_TE_MASK)) {
++        return;
++    }
++
++    // if the fifo is full, return and set the fifo overflow flag
++    if (s->tx_fifo_written == s->tx_fifo_size) {
++        s->fifo |= R_FIFO_TXOF_MASK;
++        lpuart_update_irq(s);
++        qemu_log_mask(LOG_GUEST_ERROR, "s32k358 lpuart: TxFIFO full");
++        return;
++    }
++
++    // Transmitting
++    s->stat &= ~R_STAT_TC_MASK;
++    // The fifo is no more empty
++    s->fifo &= ~R_FIFO_TXEMPT_MASK;
++
++    uint8_t msg = s->data & R_DATA_R07T07_MASK;
++
++    // Write the data into the fifo
++    memcpy(s->tx_fifo + s->tx_fifo_written, &msg, 1);
++    s->tx_fifo_written += 1;
++
++    lpuart_update_watermark(s);
++    lpuart_update_irq(s);
++    // Transmit
++    lpuart_transmit(NULL, G_IO_OUT, s);
++}
++
++static void lpuart_write(void *opaque, hwaddr offset, uint64_t value,
++                       unsigned size)
++{
++    S32K358LPUART *s = S32K358_LPUART(opaque);
++    uint8_t osr;
++
++    if (s->global & R_GLOBAL_RST_MASK) {
++                qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: reset is active\n");
++                return;
++    }
++
++    switch (offset) {
++    case A_VERID:
++        qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: VERID is a read-only register\n");
++        break;
++
++    case A_PARAM:
++        qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: PARAM is a read-only register\n");
++        break;
++
++    case A_GLOBAL:
++        // setting the RST bit to 1 triggers the reset of all registers but global
++        if (value & ~R_GLOBAL_RST_MASK) {
++             qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: GLOBAL reserved fields\n");
++            break;
++        }
++
++        if (value) {
++            lpuart_reset((DeviceState *)s);
++        }
++
++        s->global = value;
++        break;
++
++    case A_BAUD:
++        // Check if receiver and transmitter are disabled
++        if ((s->ctrl & R_CTRL_RE_MASK) || (s->ctrl & R_CTRL_TE_MASK)) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: to change the baud register transmitter and receiver must be disabled.\n");
++                break;
++        }
++
++        if (value & ~(R_BAUD_BOTHEDGE_MASK | R_BAUD_OSR_MASK |
++            R_BAUD_SBNS_MASK | R_BAUD_SBR_MASK)) {
++             qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: BAUD unimplemented fields\n");
++            break;
++        }
++
++        osr = (value & R_BAUD_OSR_MASK) >> R_BAUD_OSR_SHIFT;
++        if (osr == 0x1 || osr == 0x2) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: OSR 0x1b and 0x10b values are reserved\n");
++            break;
++        } else if (osr >= 0x3 && osr <= 0x6) {
++            if (!(value & R_BAUD_BOTHEDGE_MASK)) {
++                qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: OSR 0x3...0x06 can be set only if baud[BOTHEDGE]]=1\n");
++                break;
++            }
++        }
++
++        s->baud = value;
++
++        lpuart_update_parameters(s);
++        break;
++
++    case A_STAT:
++        if (value & (R_STAT_TC_MASK | R_STAT_TDRE_MASK | R_STAT_RDRF_MASK)) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: STAT TC, TDRE and RDRF are readonly\n");
++                break;
++        }
++        qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: STAT unimplemented fields\n");
++
++        break;
++    case A_CTRL:
++        if (value & ~(R_CTRL_PT_MASK | R_CTRL_PE_MASK | R_CTRL_TE_MASK |
++            R_CTRL_RE_MASK | R_CTRL_TCIE_MASK | R_CTRL_TIE_MASK | R_CTRL_RIE_MASK)) {
++                qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: CTRL unimplemented fields\n");
++                break;
++            }
++
++        s->ctrl = value;
++        lpuart_update_parameters(s);
++        lpuart_update_irq(s);
++        break;
++
++    case A_DATA:
++        if (value & ~R_DATA_R07T07_MASK) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: DATA unimplemented fields\n");
++            break;
++        }
++        s->data = value;
++        // Write the new data into the fifo, if there is enough space
++        lpuart_write_tx_fifo(s);
++        break;
++
++    case A_FIFO:
++        if (value & ~(R_FIFO_TXFLUSH_MASK | R_FIFO_RXFLUSH_MASK | R_FIFO_TXOF_MASK |
++             R_FIFO_RXUF_MASK | R_FIFO_TXFE_MASK | R_FIFO_RXFE_MASK |
++             R_FIFO_TXOFE_MASK | R_FIFO_RXUFE_MASK)) {
++                qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: FIFO unimplemented or read only fields\n");
++                break;
++        }
++
++        // Check if receiver and transmitter are disabled
++        if ((s->ctrl & R_CTRL_RE_MASK) || (s->ctrl & R_CTRL_TE_MASK)) {
++            if (value & (R_FIFO_RXFE_MASK | R_FIFO_TXFE_MASK)) {
++                qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: to enable/disable fifo, transmitter and receiver must be disabled.\n");
++                break;
++            }
++        }
++
++        if (value & R_FIFO_TXOF_MASK)
++            s->fifo &= ~R_FIFO_TXOF_MASK;
++        if (value & R_FIFO_RXUF_MASK)
++            s->fifo &= ~R_FIFO_RXUF_MASK;
++
++        // Flush all data inside the fifo
++        if (value & R_FIFO_RXFLUSH_MASK) {
++            s->rx_fifo_written = 0;
++            s->fifo |= R_FIFO_RXEMPT_MASK;
++            s->stat &= R_STAT_RDRF_MASK;
++        }
++        if (value & R_FIFO_TXFLUSH_MASK) {
++            s->tx_fifo_written = 0;
++            s->fifo |= R_FIFO_TXEMPT_MASK;
++            s->stat |= R_STAT_TDRE_MASK;
++        }
++
++        s->fifo &= ~(R_FIFO_TXOFE_MASK | R_FIFO_RXUFE_MASK | R_FIFO_TXFE_MASK | R_FIFO_RXFE_MASK);
++        s->fifo |= value & (R_FIFO_TXOFE_MASK | R_FIFO_RXUFE_MASK | R_FIFO_TXFE_MASK | R_FIFO_RXFE_MASK);
++
++        // Change the rx fifo dimension
++        if (value & R_FIFO_RXFE_MASK) {
++            if (s->id < 2)
++                s->rx_fifo_size = S32K358_LPUART_0_1_RX_FIFO_SIZE;
++            else
++                s->rx_fifo_size = S32K358_LPUART_2_15_RX_FIFO_SIZE;
++        } else
++            s->rx_fifo_size = 1;
++
++        // Change the tx fifo dimension
++        if (value & R_FIFO_RXFE_MASK) {
++            if (s->id < 2)
++                s->tx_fifo_size = S32K358_LPUART_0_1_TX_FIFO_SIZE;
++            else
++                s->tx_fifo_size = S32K358_LPUART_2_15_TX_FIFO_SIZE;
++        } else
++            s->tx_fifo_size = 1;
++
++        lpuart_update_irq(s);
++        break;
++
++    case A_WATER:
++        if (value & ~(R_WATER_RXWATER_MASK | R_WATER_TXWATER_MASK)) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: WATER reserved or read only fields\n");
++                break;
++        } else if ((s->id >= 2) & (value & ~(R_WATER_RXWATER_SHORT_MASK | R_WATER_TXWATER_SHORT_MASK))) {
++            qemu_log_mask(LOG_GUEST_ERROR,
++                          "S32K358 LPUART: WATER must be smaller for lpuart2...lpuart15\n");
++                break;
++        }
++        if (s->id < 2) {
++            s->tx_fifo_watermark = (value & R_WATER_TXWATER_MASK) >> R_WATER_TXWATER_SHIFT;
++            s->rx_fifo_watermark = (value & R_WATER_RXWATER_MASK) >> R_WATER_RXWATER_SHIFT;
++        } else {
++            s->tx_fifo_watermark = (value & R_WATER_TXWATER_SHORT_MASK) >> R_WATER_TXWATER_SHORT_SHIFT;
++            s->rx_fifo_watermark = (value & R_WATER_RXWATER_SHORT_MASK) >> R_WATER_RXWATER_SHORT_SHIFT;
++        }
++
++
++        lpuart_update_watermark(s);
++        break;
++
++    default:
++        qemu_log_mask(LOG_GUEST_ERROR,
++                      "S32K358 LPUART write: bad offset 0x%x\n", (int) offset);
++        break;
++    }
++}
++
++static const MemoryRegionOps lpuart_ops = {
++    .read = lpuart_read,
++    .write = lpuart_write,
++    .endianness = DEVICE_NATIVE_ENDIAN,
++};
++
++static void lpuart_init(Object *obj)
++{
++    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
++    S32K358LPUART *s = S32K358_LPUART(obj);
++
++    memory_region_init_io(&s->iomem, obj, &lpuart_ops, s, "uart", 0x0800);
++    sysbus_init_mmio(sbd, &s->iomem);
++    sysbus_init_irq(sbd, &s->uartint);
++}
++
++static void lpuart_realize(DeviceState *dev, Error **errp)
++{
++    S32K358LPUART *s = S32K358_LPUART(dev);
++
++    if (s->pclk_frq == 0) {
++        error_setg(errp, "S32K358 LPUART: pclk-frq property must be set");
++        return;
++    }
++
++    /* Flow control not implemented
++     */
++    qemu_chr_fe_set_handlers(&s->chr, lpuart_can_receive, lpuart_receive,
++                             NULL, NULL, s, NULL, true);
++}
++
++static int lpuart_post_load(void *opaque, int version_id)
++{
++    S32K358LPUART *s = S32K358_LPUART(opaque);
++
++    lpuart_update_parameters(s);
++    lpuart_update_irq(s);
++    return 0;
++}
++
++static const VMStateDescription lpuart_vmstate = {
++    .name = "s32k358-lpuart",
++    .version_id = 1,
++    .minimum_version_id = 1,
++    .post_load = lpuart_post_load,
++    .fields = (const VMStateField[]) {
++        VMSTATE_UINT32(id, S32K358LPUART),
++        VMSTATE_UINT32(verid, S32K358LPUART),
++        VMSTATE_UINT32(param, S32K358LPUART),
++        VMSTATE_UINT32(global, S32K358LPUART),
++        VMSTATE_UINT32(baud, S32K358LPUART),
++        VMSTATE_UINT32(stat, S32K358LPUART),
++        VMSTATE_UINT32(ctrl, S32K358LPUART),
++        VMSTATE_UINT32(data, S32K358LPUART),
++        VMSTATE_UINT32(fifo, S32K358LPUART),
++        VMSTATE_UINT8_ARRAY(rx_fifo, S32K358LPUART, S32K358_LPUART_0_1_RX_FIFO_SIZE),
++        VMSTATE_UINT8_ARRAY(tx_fifo, S32K358LPUART, S32K358_LPUART_0_1_TX_FIFO_SIZE),
++        VMSTATE_END_OF_LIST()
++    }
++};
++
++static Property lpuart_properties[] = {
++    DEFINE_PROP_CHR("chardev", S32K358LPUART, chr),
++    DEFINE_PROP_UINT32("pclk-frq", S32K358LPUART, pclk_frq, 0),
++    DEFINE_PROP_UINT32("id", S32K358LPUART, id, 0),
++    DEFINE_PROP_END_OF_LIST(),
++};
++
++static void lpuart_class_init(ObjectClass *klass, void *data)
++{
++    DeviceClass *dc = DEVICE_CLASS(klass);
++
++    dc->realize = lpuart_realize;
++    dc->vmsd = &lpuart_vmstate;
++    dc->reset = lpuart_reset;
++    device_class_set_props(dc, lpuart_properties);
++}
++
++static const TypeInfo lpuart_info = {
++    .name = TYPE_S32K358_LPUART,
++    .parent = TYPE_SYS_BUS_DEVICE,
++    .instance_size = sizeof(S32K358LPUART),
++    .instance_init = lpuart_init,
++    .class_init = lpuart_class_init,
++};
++
++static void lpuart_register_types(void)
++{
++    type_register_static(&lpuart_info);
++}
++
++type_init(lpuart_register_types);
 diff --git a/hw/timer/Kconfig b/hw/timer/Kconfig
 index 61fbb62b65..a311e189ba 100644
 --- a/hw/timer/Kconfig
@@ -299,7 +938,7 @@ index 80427852e0..45b85dbdf6 100644
 +specific_ss.add(when: 'CONFIG_S32K358_TIMER', if_true: files('s32k358_timer.c'))
 diff --git a/hw/timer/s32k358_timer.c b/hw/timer/s32k358_timer.c
 new file mode 100644
-index 0000000000..aca82878a7
+index 0000000000..2cf284a788
 --- /dev/null
 +++ b/hw/timer/s32k358_timer.c
 @@ -0,0 +1,365 @@
@@ -551,7 +1190,7 @@ index 0000000000..aca82878a7
 +static const MemoryRegionOps s32k358_timer_ops = {
 +    .read = s32k358_timer_read,
 +    .write = s32k358_timer_write,
-+    .endianness = DEVICE_LITTLE_ENDIAN,
++    .endianness = DEVICE_NATIVE_ENDIAN,
 +};
 +
 +// Function called when the timer expires
@@ -668,6 +1307,70 @@ index 0000000000..aca82878a7
 +
 +type_init(s32k358_timer_register_types);
 +
+diff --git a/include/hw/char/s32k358_uart.h b/include/hw/char/s32k358_uart.h
+new file mode 100644
+index 0000000000..90297b4a6d
+--- /dev/null
++++ b/include/hw/char/s32k358_uart.h
+@@ -0,0 +1,58 @@
++/*
++ * S32K358 LPUART emulation
++ *
++ * SPDX-License-Identifier: CC-BY-NC-4.0
++ * Copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
++ *
++ */
++
++#ifndef S32K358_UART_H
++#define S32K358_UART_H
++
++#include "hw/sysbus.h"
++#include "chardev/char-fe.h"
++#include "qom/object.h"
++
++#define TYPE_S32K358_LPUART "s32k358_lpuart"
++OBJECT_DECLARE_SIMPLE_TYPE(S32K358LPUART, S32K358_LPUART)
++
++#define S32K358_LPUART_0_1_RX_FIFO_SIZE           16
++#define S32K358_LPUART_0_1_TX_FIFO_SIZE           16
++#define S32K358_LPUART_2_15_RX_FIFO_SIZE           4
++#define S32K358_LPUART_2_15_TX_FIFO_SIZE           4
++
++struct S32K358LPUART {
++    /*< private >*/
++    SysBusDevice parent_obj;
++
++    /*< public >*/
++    MemoryRegion iomem;
++    CharBackend chr;
++    qemu_irq uartint;
++    guint watch_tag;
++
++    uint32_t id;
++    uint32_t verid;
++    uint32_t param;
++    uint32_t pclk_frq;
++    uint32_t baud;
++    uint32_t global;
++    uint32_t stat;
++    uint32_t ctrl;
++    uint32_t data;
++    uint32_t fifo;
++    uint32_t txcnt;
++    uint32_t rxcnt;
++
++    /* This UART has a FIFO */
++    uint8_t rx_fifo[S32K358_LPUART_0_1_RX_FIFO_SIZE];
++    uint8_t tx_fifo[S32K358_LPUART_0_1_TX_FIFO_SIZE];
++    uint8_t tx_fifo_size;
++    uint8_t rx_fifo_size;
++    uint8_t tx_fifo_written;
++    uint8_t rx_fifo_written;
++    uint8_t tx_fifo_watermark;
++    uint8_t rx_fifo_watermark;
++};
++
++#endif
 diff --git a/include/hw/timer/s32k358_timer.h b/include/hw/timer/s32k358_timer.h
 new file mode 100644
 index 0000000000..eb7c8b0a08

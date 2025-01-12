@@ -148,9 +148,15 @@ __STATIC_INLINE void NVIC_EnableIRQ(uint32_t IRQn)
   NVIC->ISER[((IRQn) >> 5UL)] = (uint32_t)(1UL << ((IRQn) & 0x1FUL));
 }
 
-__STATIC_INLINE void NVIC_EnableAllIRQ(void)
+/**
+  \brief   Disable External Interrupt
+  \details Disables a device-specific interrupt in the NVIC interrupt controller.
+  \param [in]      IRQn  External interrupt number. Value cannot be negative.
+ */
+__STATIC_INLINE void NVIC_DisableIRQ(uint32_t IRQn)
 {
-  for (int i = 0; i < 8; i++)
-    NVIC->ISER[(i)] = 0xFFFFFFFF;
+  NVIC->ICER[((IRQn) >> 5UL)] = (uint32_t)(1UL << ((IRQn) & 0x1FUL));
 }
+
+
 #endif

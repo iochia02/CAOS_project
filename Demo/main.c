@@ -15,13 +15,15 @@
 
 #include "uart.h"
 #define mainTASK_PRIORITY    ( tskIDLE_PRIORITY + 2 )
+#define LEN_USR_BUF 100
 
 SemaphoreHandle_t xBinarySemaphoreA;
 SemaphoreHandle_t xBinarySemaphoreB;
 SemaphoreHandle_t xBinarySemaphoreC;
+SemaphoreHandle_t xBinarySemaphoreD;
 
 uint32_t n_timer0 = 0, n_timer1 = 0;
-char msgA[150], msgB[150], msgC[150];
+char msgA[150], msgB[150], msgC[150], msgD[200], usr_buf[LEN_USR_BUF];
 
 void vTaskA(void *pvParameters) {
 	(void) pvParameters;
@@ -31,9 +33,9 @@ void vTaskA(void *pvParameters) {
 		if (xSemaphoreTake(xBinarySemaphoreA, portMAX_DELAY) == pdTRUE) {
 			// The semaphore was successfully taken, meaning the ISR occurred
 			// When timer 0 channel 0 expires, the task prints the current value of the other two timers
-			snprintf (msgC, 150, "Task A (timer 00): timer B (01) value=%10ld, timer C (10) value=%10ld\n",
+			snprintf (msgA, 150, "Task A (timer 00): timer B (01) value=%10ld, timer C (10) value=%10ld\n",
 					  ulGetCount(TIMER0,CHANNEL1), ulGetCount(TIMER1,CHANNEL0));
-			UART_printf(msgC);
+			UART_printf(msgA);
 		}
 	}
 }
@@ -68,8 +70,22 @@ void vTaskC(void *pvParameters) {
 	while(1) {
 		if (xSemaphoreTake(xBinarySemaphoreC, portMAX_DELAY) == pdTRUE) {
 			// The task prints the number of times that the timer 0 channel 0 expired
-			snprintf (msgA, 150, "Task C (timer 10): timer 10 expired %ld times\n", n_timer0);
-			UART_printf(msgA);
+			snprintf (msgC, 150, "Task C (timer 10): timer 10 expired %ld times\n", n_timer0);
+			UART_printf(msgC);
+			n_timer0++;
+		}
+	}
+}
+
+void vTaskD(void *pvParameters) {
+	(void) pvParameters;
+	UART_printf("Hello world from task D\n");
+
+	while(1) {
+		if (xSemaphoreTake(xBinarySemaphoreD, portMAX_DELAY) == pdTRUE) {
+			UART_getRxBuffer(usr_buf, LEN_USR_BUF);
+			snprintf (msgD, 200, "Task D: the user wrote %s\n", usr_buf);
+			UART_printf(msgD);
 			n_timer0++;
 		}
 	}
@@ -86,11 +102,13 @@ int main(int argc, char **argv){
 	xTaskCreate(vTaskA, "TaskA", configMINIMAL_STACK_SIZE*5, NULL, mainTASK_PRIORITY, NULL);
 	xTaskCreate(vTaskB, "TaskB", configMINIMAL_STACK_SIZE*5, NULL, mainTASK_PRIORITY, NULL);
 	xTaskCreate(vTaskC, "TaskC", configMINIMAL_STACK_SIZE*5, NULL, mainTASK_PRIORITY, NULL);
+	xTaskCreate(vTaskD, "TaskD", configMINIMAL_STACK_SIZE*5, NULL, mainTASK_PRIORITY+2, NULL);
 
 	xBinarySemaphoreA = xSemaphoreCreateBinary();
 	xBinarySemaphoreB = xSemaphoreCreateBinary();
 	xBinarySemaphoreC = xSemaphoreCreateBinary();
-    if (xBinarySemaphoreA == NULL || xBinarySemaphoreB == NULL || xBinarySemaphoreC == NULL) {
+	xBinarySemaphoreD = xSemaphoreCreateBinary();
+    if (xBinarySemaphoreA == NULL || xBinarySemaphoreB == NULL || xBinarySemaphoreC == NULL || xBinarySemaphoreD == NULL) {
 		UART_printf("Something went wrong in the semaphores creation\n");
 		return -1;
 	}

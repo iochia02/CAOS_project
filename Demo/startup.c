@@ -33,6 +33,7 @@ extern void xPortPendSVHandler( void );
 extern void xPortSysTickHandler( void );
 extern void vTimer0Handler( void );
 extern void vTimer1Handler( void );
+extern void vUart0Handler( void );
 
 /* Exception handlers. */
 static void HardFault_Handler( void ) __attribute__( ( naked ) );
@@ -172,6 +173,7 @@ const uint32_t* isr_vector[] __attribute__((section(".isr_vector"), used)) =
     0,
     0,
     0,
+    0,
     0, // 112
     0,
     0,
@@ -201,7 +203,7 @@ const uint32_t* isr_vector[] __attribute__((section(".isr_vector"), used)) =
     0,
     0,
     0,
-    0,
+    (uint32_t *)&vUart0Handler,
     0,
     0,
     0, // 144

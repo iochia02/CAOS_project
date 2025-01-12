@@ -64,4 +64,4 @@ Now we can test FreeRTOS on our custom machine, using the application in `Demo`:
 **N.B. Remember to put the correct directory for your FreeRTOS folder in the Makefile**
 
 ## What's next
-We still need to implement uart. Now the uart is working because we're using the uart already implemented for the mps2 board, but that doesn't model our machine 😢.
+We still need to write the documentation 😢.

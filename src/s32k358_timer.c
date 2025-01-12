@@ -246,7 +246,7 @@ static void s32k358_timer_write(void *opaque, hwaddr offset, uint64_t value,
 static const MemoryRegionOps s32k358_timer_ops = {
     .read = s32k358_timer_read,
     .write = s32k358_timer_write,
-    .endianness = DEVICE_LITTLE_ENDIAN,
+    .endianness = DEVICE_NATIVE_ENDIAN,
 };
 
 // Function called when the timer expires
