@@ -20,50 +20,51 @@
 #include "hw/irq.h"
 #include "hw/qdev-properties-system.h"
 
-REG32(VERID, 0x0)
-REG32(PARAM, 0x4)
-REG32(GLOBAL, 0x8)
+REG32(VERID, 0x0) // Indicates the version integrated for this instance
+REG32(PARAM, 0x4) // Indicates the parameter configuration for this instance on the chi
+REG32(GLOBAL, 0x8) // Performs global functions
     FIELD(GLOBAL, RST, 1, 1)
-REG32(BAUD, 0x10)
-    FIELD(BAUD, SBR, 0, 13)
-    FIELD(BAUD, SBNS, 13, 1)
-    FIELD(BAUD, BOTHEDGE, 17, 1)
-    FIELD(BAUD, OSR, 24, 5)
-REG32(STAT, 0x14)
-    FIELD(STAT, RDRF, 21, 1)
-    FIELD(STAT, TC, 22, 1)
-    FIELD(STAT, TDRE, 23, 1)
-REG32(CTRL, 0x18)
-    FIELD(CTRL, PT, 0, 1)
-    FIELD(CTRL, PE, 1, 1)
-    FIELD(CTRL, RE, 18, 1)
-    FIELD(CTRL, TE, 19, 1)
-    FIELD(CTRL, RIE, 21, 1)
-    FIELD(CTRL, TCIE, 22, 1)
-    FIELD(CTRL, TIE, 23, 1)
-REG32(DATA, 0x1C)
+REG32(BAUD, 0x10) // Configures the baud rate
+    FIELD(BAUD, SBR, 0, 13) // Baud Rate Modulo Divisor
+    FIELD(BAUD, SBNS, 13, 1) // Stop Bit Number Select
+    FIELD(BAUD, BOTHEDGE, 17, 1) // Both Edge Sampling
+    FIELD(BAUD, OSR, 24, 5) // Oversampling Ratio
+REG32(STAT, 0x14) // Provides the module status.
+    FIELD(STAT, RDRF, 21, 1) // Receive Data Register Full Flag
+    FIELD(STAT, TC, 22, 1) // Transmission Complete Flag
+    FIELD(STAT, TDRE, 23, 1) // Transmit Data Register Empty Flag
+REG32(CTRL, 0x18) // Controls various optional features of the LPUART system.
+    FIELD(CTRL, PT, 0, 1) // Parity Type
+    FIELD(CTRL, PE, 1, 1) // Parity Enable
+    FIELD(CTRL, RE, 18, 1) // Receiver Enable
+    FIELD(CTRL, TE, 19, 1) // Transmitter Enable
+    FIELD(CTRL, RIE, 21, 1) // Receiver Interrupt Enable
+    FIELD(CTRL, TCIE, 22, 1) // Transmission Complete Interrupt Enable
+    FIELD(CTRL, TIE, 23, 1) // Transmit Interrupt Enable
+REG32(DATA, 0x1C)  // Read receive FIFO bits 0-7 or write transmit FIFO bit 0-7
     FIELD(DATA, R07T07, 0, 8)
-REG32(FIFO, 0x28)
-    FIELD(FIFO, RXFIFOSIZE, 0, 3)
-    FIELD(FIFO, RXFE, 3, 1)
-    FIELD(FIFO, TXFIFOSIZE, 4, 3)
-    FIELD(FIFO, TXFE, 7, 1)
-    FIELD(FIFO, RXUFE, 8, 1)
-    FIELD(FIFO, TXOFE, 9, 1)
-    FIELD(FIFO, RXFLUSH, 14, 1)
-    FIELD(FIFO, TXFLUSH, 15, 1)
-    FIELD(FIFO, RXUF, 16, 1)
-    FIELD(FIFO, TXOF, 17, 1)
-    FIELD(FIFO, RXEMPT, 22, 1)
-    FIELD(FIFO, TXEMPT, 23, 1)
-REG32(WATER, 0x2C)
-    FIELD(WATER, TXWATER, 0, 4)
-    FIELD(WATER, TXWATER_SHORT, 0, 2)
-    FIELD(WATER, TXCOUNT, 8, 5)
-    FIELD(WATER, RXWATER, 16, 4)
-    FIELD(WATER, RXWATER_SHORT, 16, 2)
-    FIELD(WATER, RXCOUNT, 24, 5)
+REG32(FIFO, 0x28) // Provides you the ability to turn on and turn off the FIFO functionality.
+    FIELD(FIFO, RXFIFOSIZE, 0, 3) // Receive FIFO Buffer Depth
+    FIELD(FIFO, RXFE, 3, 1) // Receive FIFO Enable
+    FIELD(FIFO, TXFIFOSIZE, 4, 3) // Transmit FIFO Buffer Depth
+    FIELD(FIFO, TXFE, 7, 1) // Transmit FIFO Enable
+    FIELD(FIFO, RXUFE, 8, 1) // Receive FIFO Underflow Interrupt Enable
+    FIELD(FIFO, TXOFE, 9, 1) // Transmit FIFO Overflow Interrupt Enable
+    FIELD(FIFO, RXFLUSH, 14, 1) // Receive FIFO Flush
+    FIELD(FIFO, TXFLUSH, 15, 1) // Transmit FIFO Flush
+    FIELD(FIFO, RXUF, 16, 1) // Receiver FIFO Underflow Flag
+    FIELD(FIFO, TXOF, 17, 1) // Transmitter FIFO Overflow Flag
+    FIELD(FIFO, RXEMPT, 22, 1) // Receive FIFO Or Buffer Empty
+    FIELD(FIFO, TXEMPT, 23, 1) // Transmit FIFO Or Buffer Empty
+REG32(WATER, 0x2C) // Provides the ability to set a programmable threshold for notification, or sets the programmable thresholds to indicate that transmit data can be written or receive data can be read.
+    FIELD(WATER, TXWATER, 0, 4) // Transmit Watermark
+    FIELD(WATER, TXWATER_SHORT, 0, 2) // Transmit Watermark
+    FIELD(WATER, TXCOUNT, 8, 5) // Transmit Counter
+    FIELD(WATER, RXWATER, 16, 4) // Receive Watermark
+    FIELD(WATER, RXWATER_SHORT, 16, 2) // Receive Watermark
+    FIELD(WATER, RXCOUNT, 24, 5) // Receive Counter
 
+// Update the configuration of the UART
 static void lpuart_update_parameters(S32K358LPUART *s)
 {
     QEMUSerialSetParams ssp;
@@ -94,15 +95,17 @@ static void lpuart_update_parameters(S32K358LPUART *s)
         ssp.stop_bits = 2;
 
     // Configure the baud rate
-    // Computation at page 4618: baud_rate = clock / ((OSR+1) * SBR)
+    // Computation at page 4618 of the reference manual: baud_rate = clock / ((OSR+1) * SBR)
     if ((s->baud & R_BAUD_SBR_MASK))
         ssp.speed = s->pclk_frq / ((((s->baud & R_BAUD_OSR_MASK) >> R_BAUD_OSR_SHIFT) + 1) * (s->baud & R_BAUD_SBR_MASK));
     else
         ssp.speed = s->pclk_frq;
 
+    //  Issue a device specific ioctl to a backend.  This function is thread-safe.
     qemu_chr_fe_ioctl(&s->chr, CHR_IOCTL_SERIAL_SET_PARAMS, &ssp);
 }
 
+// Check if the FIFO level is higher, equal or lower than the watermark and update the flags
 static void lpuart_update_watermark(S32K358LPUART *s)
 {
     if (s->tx_fifo_written > s->tx_fifo_watermark)
@@ -116,6 +119,7 @@ static void lpuart_update_watermark(S32K358LPUART *s)
         s->stat &= ~R_STAT_RDRF_MASK;
 }
 
+// Set the IRQ if necessary
 static void lpuart_update_irq(S32K358LPUART *s)
 {
     if (((s->ctrl & R_CTRL_TIE_MASK) && (s->stat & R_STAT_TDRE_MASK)) || // there is room in the transmit FIFO to write another transmit character to Data
@@ -186,6 +190,7 @@ static void lpuart_receive(void *opaque, const uint8_t *buf, int size)
         return;
     }
 
+    // Copy the buffer into the receive fifo
     memcpy(s->rx_fifo + s->rx_fifo_written, buf, 1);
     s->rx_fifo_written++;
     // the receive fifo is no more empty
@@ -196,24 +201,30 @@ static void lpuart_receive(void *opaque, const uint8_t *buf, int size)
 }
 
 static void lpuart_read_rx_fifo(S32K358LPUART *s) {
+    /* We tried to read from an empty receive FIFO:
+     * set the underflow flag and return
+     */
+
     if (s->rx_fifo_written == 0) {
         s->fifo |= R_FIFO_RXUF_MASK;
         lpuart_update_irq(s);
         return;
     }
 
+    // Copy the first byte from the receive FIFO to the data register (to be read by the user application)
     s->data &= ~R_DATA_R07T07_MASK;
     s->data |= s->rx_fifo[0];
     s->rx_fifo_written--;
     if (s->rx_fifo_written == 0)
         s->fifo |= R_FIFO_RXEMPT_MASK;
-    else
+    else // Update the fifo
         memmove(s->rx_fifo, s->rx_fifo + 1, s->rx_fifo_written);
 
     lpuart_update_watermark(s);
     lpuart_update_irq(s);
 }
 
+// Return the value of the requested register
 static uint64_t lpuart_read(void *opaque, hwaddr offset, unsigned size)
 {
     S32K358LPUART *s = S32K358_LPUART(opaque);
@@ -260,14 +271,14 @@ static uint64_t lpuart_read(void *opaque, hwaddr offset, unsigned size)
 }
 
 /* Try to send tx data, and arrange to be called back later if
- * we can't (ie the char backend is busy/blocking).
+ * we can't (i.e., the char backend is busy/blocking).
  */
 static gboolean lpuart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
 {
     S32K358LPUART *s = S32K358_LPUART(opaque);
     int ret;
 
-    /* instant drain the fifo when there's no back-end */
+    // instant drain the FIFO when there's no back-end
     if (!qemu_chr_fe_backend_connected(&s->chr)) {
         s->tx_fifo_written = 0;
         return G_SOURCE_REMOVE;
@@ -283,7 +294,7 @@ static gboolean lpuart_transmit(void *do_not_use, GIOCondition cond, void *opaqu
         return G_SOURCE_REMOVE;
     }
 
-    // Transmission from front-end to back-enc
+    // Transmission from front-end to back-end
     ret = qemu_chr_fe_write(&s->chr, s->tx_fifo, s->tx_fifo_written);
 
     // Update the number of elements in the fifo and shift the fifo
@@ -341,16 +352,18 @@ static void lpuart_write_tx_fifo(S32K358LPUART *s) {
 
     lpuart_update_watermark(s);
     lpuart_update_irq(s);
-    // Transmit
+    // Transmit the data contained in the transmit FIFO
     lpuart_transmit(NULL, G_IO_OUT, s);
 }
 
+// Write to the UART registers
 static void lpuart_write(void *opaque, hwaddr offset, uint64_t value,
                        unsigned size)
 {
     S32K358LPUART *s = S32K358_LPUART(opaque);
     uint8_t osr;
 
+    //  The reset takes effect immediately and remains asserted until you negate it.
     if (s->global & R_GLOBAL_RST_MASK) {
                 qemu_log_mask(LOG_GUEST_ERROR,
                           "S32K358 LPUART: reset is active\n");
@@ -379,7 +392,7 @@ static void lpuart_write(void *opaque, hwaddr offset, uint64_t value,
         if (value) {
             lpuart_reset((DeviceState *)s);
         }
-
+        // Set again the global value (in case it has been reset)
         s->global = value;
         break;
 
@@ -548,7 +561,7 @@ static void lpuart_init(Object *obj)
 {
     SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
     S32K358LPUART *s = S32K358_LPUART(obj);
-
+    // Memory map the device and connect the IRQ
     memory_region_init_io(&s->iomem, obj, &lpuart_ops, s, "uart", 0x0800);
     sysbus_init_mmio(sbd, &s->iomem);
     sysbus_init_irq(sbd, &s->uartint);
@@ -563,12 +576,13 @@ static void lpuart_realize(DeviceState *dev, Error **errp)
         return;
     }
 
-    /* Flow control not implemented
-     */
+    // Flow control not implemented
+    // Handlers to allow the UART work in the receive direction
     qemu_chr_fe_set_handlers(&s->chr, lpuart_can_receive, lpuart_receive,
                              NULL, NULL, s, NULL, true);
 }
 
+// To recover after a problem
 static int lpuart_post_load(void *opaque, int version_id)
 {
     S32K358LPUART *s = S32K358_LPUART(opaque);
@@ -578,6 +592,7 @@ static int lpuart_post_load(void *opaque, int version_id)
     return 0;
 }
 
+// To make the device snapshoptable: it is not fully implemented
 static const VMStateDescription lpuart_vmstate = {
     .name = "s32k358-lpuart",
     .version_id = 1,

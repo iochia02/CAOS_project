@@ -16,6 +16,7 @@
 #define TYPE_S32K358_LPUART "s32k358_lpuart"
 OBJECT_DECLARE_SIMPLE_TYPE(S32K358LPUART, S32K358_LPUART)
 
+// The first two LPUART support bigger FIFO
 #define S32K358_LPUART_0_1_RX_FIFO_SIZE           16
 #define S32K358_LPUART_0_1_TX_FIFO_SIZE           16
 #define S32K358_LPUART_2_15_RX_FIFO_SIZE           4
@@ -26,9 +27,9 @@ struct S32K358LPUART {
     SysBusDevice parent_obj;
 
     /*< public >*/
-    MemoryRegion iomem;
+    MemoryRegion iomem; // memory region for the memory mapping
     CharBackend chr;
-    qemu_irq uartint;
+    qemu_irq uartint; // IRQ number
     guint watch_tag;
 
     uint32_t id;

@@ -27,7 +27,7 @@
 
 typedef struct
 {
-	__IO uint32_t RELOAD;						// Offset: 0x1x0 (R/W) Timer load value (specifies the length of the timeout peiod in clock cycles)
+	__IO uint32_t RELOAD;						// Offset: 0x1x0 (R/W) Timer load value (specifies the length of the timeout period in clock cycles)
 	__O  uint32_t  VALUE;                     	// Offset: 0x1x4 (R) Current timer value (indicates the current timer value)
 	__IO uint32_t  CTRL;                 	    // Offset: 0x1x8 (R/W) Timer control (controls timer behaviour)
 	union {

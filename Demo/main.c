@@ -22,7 +22,7 @@ SemaphoreHandle_t xBinarySemaphoreB;
 SemaphoreHandle_t xBinarySemaphoreC;
 SemaphoreHandle_t xBinarySemaphoreD;
 
-uint32_t n_timer0 = 0, n_timer1 = 0;
+uint32_t n_timer10 = 0, n_timer01 = 0;
 char msgA[150], msgB[150], msgC[150], msgD[200], usr_buf[LEN_USR_BUF];
 
 void vTaskA(void *pvParameters) {
@@ -49,7 +49,7 @@ void vTaskB(void *pvParameters) {
 		if (xSemaphoreTake(xBinarySemaphoreB, portMAX_DELAY) == pdTRUE) {
 			// When the timer 0 channel 1 expires, the task changes the period of timer 1 channel 0
 			period = ulGetReload(TIMER1, CHANNEL0);
-			if (n_timer1 % 2 == 0) {
+			if (n_timer01 % 2 == 0) {
 				if (xSetReload(TIMER1, CHANNEL0, period / 2) == pdFALSE)
 					UART_printf("Failed setting new reload value\n");
 			} else {
@@ -58,7 +58,7 @@ void vTaskB(void *pvParameters) {
 			}
 			snprintf (msgB, 150, "Task B (timer 01): Period of timer C (10) changed from %ld to %ld\n", period, ulGetReload(TIMER1, CHANNEL0));
 			UART_printf(msgB);
-			n_timer1++;
+			n_timer01++;
 		}
 	}
 }
@@ -69,10 +69,10 @@ void vTaskC(void *pvParameters) {
 
 	while(1) {
 		if (xSemaphoreTake(xBinarySemaphoreC, portMAX_DELAY) == pdTRUE) {
-			// The task prints the number of times that the timer 0 channel 0 expired
-			snprintf (msgC, 150, "Task C (timer 10): timer 10 expired %ld times\n", n_timer0);
+			// The task prints the number of times that the timer 1 channel 0 expired
+			n_timer10++;
+			snprintf (msgC, 150, "Task C (timer 10): timer 10 expired %ld times\n", n_timer10);
 			UART_printf(msgC);
-			n_timer0++;
 		}
 	}
 }
@@ -86,7 +86,6 @@ void vTaskD(void *pvParameters) {
 			UART_getRxBuffer(usr_buf, LEN_USR_BUF);
 			snprintf (msgD, 200, "Task D: the user wrote %s\n", usr_buf);
 			UART_printf(msgD);
-			n_timer0++;
 		}
 	}
 }

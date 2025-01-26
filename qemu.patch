@@ -1,18 +1,8 @@
-diff --git a/configs/devices/arm-softmmu/default.mak b/configs/devices/arm-softmmu/default.mak
-index 31f77c2026..096d5ee246 100644
---- a/configs/devices/arm-softmmu/default.mak
-+++ b/configs/devices/arm-softmmu/default.mak
-@@ -49,3 +49,5 @@
- # CONFIG_FSL_IMX7=n
- # CONFIG_FSL_IMX6UL=n
- # CONFIG_ALLWINNER_H3=n
-+
-+CONFIG_S32K358=y
 diff --git a/hw/arm/Kconfig b/hw/arm/Kconfig
-index 1ad60da7aa..07ce612521 100644
+index 1ad60da7aa..bd79ac61ad 100644
 --- a/hw/arm/Kconfig
 +++ b/hw/arm/Kconfig
-@@ -712,3 +712,18 @@ config ARMSSE
+@@ -712,3 +712,12 @@ config ARMSSE
      select UNIMP
      select SSE_COUNTER
      select SSE_TIMER
@@ -22,15 +12,9 @@ index 1ad60da7aa..07ce612521 100644
 +    default y
 +    depends on TCG && ARM
 +    select ARMSSE
-+    select MPS2_SCC
-+    select OR_IRQ
-+    select PL022    # SPI
-+    select PL080    # DMA controller
-+    select SPLIT_IRQ
 +    select UNIMP
 +    select S32K358_TIMER
 +    select S32K358_UART
-+    select CMSDK_APB_WATCHDOG
 diff --git a/hw/arm/meson.build b/hw/arm/meson.build
 index 0c07ab522f..ea82ee5967 100644
 --- a/hw/arm/meson.build
@@ -38,16 +22,16 @@ index 0c07ab522f..ea82ee5967 100644
 @@ -78,4 +78,6 @@ system_ss.add(when: 'CONFIG_VERSATILE', if_true: files('versatilepb.c'))
  system_ss.add(when: 'CONFIG_VEXPRESS', if_true: files('vexpress.c'))
  system_ss.add(when: 'CONFIG_Z2', if_true: files('z2.c'))
- 
+
 +arm_ss.add(when: 'CONFIG_S32K358', if_true: files('s32k358.c'))
 +
  hw_arch += {'arm': arm_ss}
 diff --git a/hw/arm/s32k358.c b/hw/arm/s32k358.c
 new file mode 100644
-index 0000000000..5f7d7b8b8c
+index 0000000000..bb930a9768
 --- /dev/null
 +++ b/hw/arm/s32k358.c
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,200 @@
 +/*
 + * ARM s32k358 board emulation.
 + *
@@ -63,24 +47,16 @@ index 0000000000..5f7d7b8b8c
 +#include "qemu/error-report.h" // error reporting
 +#include "hw/arm/boot.h" // ARM kernel loader.
 +#include "hw/arm/armv7m.h" // ARMv7M CPU object
-+#include "hw/or-irq.h" // for interrupt reqest
 +#include "hw/boards.h" //  Declarations for use by board files for creating devices (e.g machine_type_name)
 +#include "exec/address-spaces.h" //  Internal memory management interfaces
 +#include "sysemu/sysemu.h" // Misc. things related to the system emulator.
 +#include "hw/qdev-properties.h" // Define device properties
 +#include "hw/misc/unimp.h" // create_unimplemented_device
-+#include "hw/char/s32k358_uart.h"
-+#include "hw/misc/mps2-scc.h" // ARM MPS2 SCC emulation
-+#include "hw/misc/mps2-fpgaio.h" // ARM MPS2 FPGAIO emulation
-+#include "hw/ssi/pl022.h" // Arm PrimeCell PL022 Synchronous Serial Port
-+#include "hw/i2c/arm_sbcon_i2c.h" // ARM Versatile I2C controller
-+#include "hw/net/lan9118.h" // SMSC LAN9118 Ethernet interface emulation
-+#include "net/net.h" // Net configurations (clients, sockets,...)
-+#include "hw/watchdog/cmsdk-apb-watchdog.h" // This is a model of the "APB watchdog" which is part of the Cortex-M System Design Kit
 +#include "hw/qdev-clock.h" // Device's clock input and output
 +#include "qapi/qmp/qlist.h" // QList Module (provides dynamic arrays)
 +#include "qom/object.h" // QEMU Object Model
-+#include "hw/timer/s32k358_timer.h"
++#include "hw/char/s32k358_uart.h" // LPUART s32k358
++#include "hw/timer/s32k358_timer.h" // PIT s32k358
 +
 +// Data types representing the machine
 +struct S32K358MachineClass {
@@ -261,7 +237,7 @@ index 4fd74ea878..3ae728d677 100644
 --- a/hw/char/Kconfig
 +++ b/hw/char/Kconfig
 @@ -74,3 +74,6 @@ config GOLDFISH_TTY
- 
+
  config SHAKTI_UART
      bool
 +
@@ -279,10 +255,10 @@ index e5b13b6958..517d802f5d 100644
 +specific_ss.add(when: 'CONFIG_S32K358_UART', if_true: files('s32k358_uart.c'))
 diff --git a/hw/char/s32k358_uart.c b/hw/char/s32k358_uart.c
 new file mode 100644
-index 0000000000..b4ea414875
+index 0000000000..b493e01853
 --- /dev/null
 +++ b/hw/char/s32k358_uart.c
-@@ -0,0 +1,632 @@
+@@ -0,0 +1,647 @@
 +/*
 +  * S32K358 LPUART emulation
 + *
@@ -305,50 +281,51 @@ index 0000000000..b4ea414875
 +#include "hw/irq.h"
 +#include "hw/qdev-properties-system.h"
 +
-+REG32(VERID, 0x0)
-+REG32(PARAM, 0x4)
-+REG32(GLOBAL, 0x8)
++REG32(VERID, 0x0) // Indicates the version integrated for this instance
++REG32(PARAM, 0x4) // Indicates the parameter configuration for this instance on the chi
++REG32(GLOBAL, 0x8) // Performs global functions
 +    FIELD(GLOBAL, RST, 1, 1)
-+REG32(BAUD, 0x10)
-+    FIELD(BAUD, SBR, 0, 13)
-+    FIELD(BAUD, SBNS, 13, 1)
-+    FIELD(BAUD, BOTHEDGE, 17, 1)
-+    FIELD(BAUD, OSR, 24, 5)
-+REG32(STAT, 0x14)
-+    FIELD(STAT, RDRF, 21, 1)
-+    FIELD(STAT, TC, 22, 1)
-+    FIELD(STAT, TDRE, 23, 1)
-+REG32(CTRL, 0x18)
-+    FIELD(CTRL, PT, 0, 1)
-+    FIELD(CTRL, PE, 1, 1)
-+    FIELD(CTRL, RE, 18, 1)
-+    FIELD(CTRL, TE, 19, 1)
-+    FIELD(CTRL, RIE, 21, 1)
-+    FIELD(CTRL, TCIE, 22, 1)
-+    FIELD(CTRL, TIE, 23, 1)
-+REG32(DATA, 0x1C)
++REG32(BAUD, 0x10) // Configures the baud rate
++    FIELD(BAUD, SBR, 0, 13) // Baud Rate Modulo Divisor
++    FIELD(BAUD, SBNS, 13, 1) // Stop Bit Number Select
++    FIELD(BAUD, BOTHEDGE, 17, 1) // Both Edge Sampling
++    FIELD(BAUD, OSR, 24, 5) // Oversampling Ratio
++REG32(STAT, 0x14) // Provides the module status.
++    FIELD(STAT, RDRF, 21, 1) // Receive Data Register Full Flag
++    FIELD(STAT, TC, 22, 1) // Transmission Complete Flag
++    FIELD(STAT, TDRE, 23, 1) // Transmit Data Register Empty Flag
++REG32(CTRL, 0x18) // Controls various optional features of the LPUART system.
++    FIELD(CTRL, PT, 0, 1) // Parity Type
++    FIELD(CTRL, PE, 1, 1) // Parity Enable
++    FIELD(CTRL, RE, 18, 1) // Receiver Enable
++    FIELD(CTRL, TE, 19, 1) // Transmitter Enable
++    FIELD(CTRL, RIE, 21, 1) // Receiver Interrupt Enable
++    FIELD(CTRL, TCIE, 22, 1) // Transmission Complete Interrupt Enable
++    FIELD(CTRL, TIE, 23, 1) // Transmit Interrupt Enable
++REG32(DATA, 0x1C)  // Read receive FIFO bits 0-7 or write transmit FIFO bit 0-7
 +    FIELD(DATA, R07T07, 0, 8)
-+REG32(FIFO, 0x28)
-+    FIELD(FIFO, RXFIFOSIZE, 0, 3)
-+    FIELD(FIFO, RXFE, 3, 1)
-+    FIELD(FIFO, TXFIFOSIZE, 4, 3)
-+    FIELD(FIFO, TXFE, 7, 1)
-+    FIELD(FIFO, RXUFE, 8, 1)
-+    FIELD(FIFO, TXOFE, 9, 1)
-+    FIELD(FIFO, RXFLUSH, 14, 1)
-+    FIELD(FIFO, TXFLUSH, 15, 1)
-+    FIELD(FIFO, RXUF, 16, 1)
-+    FIELD(FIFO, TXOF, 17, 1)
-+    FIELD(FIFO, RXEMPT, 22, 1)
-+    FIELD(FIFO, TXEMPT, 23, 1)
-+REG32(WATER, 0x2C)
-+    FIELD(WATER, TXWATER, 0, 4)
-+    FIELD(WATER, TXWATER_SHORT, 0, 2)
-+    FIELD(WATER, TXCOUNT, 8, 5)
-+    FIELD(WATER, RXWATER, 16, 4)
-+    FIELD(WATER, RXWATER_SHORT, 16, 2)
-+    FIELD(WATER, RXCOUNT, 24, 5)
++REG32(FIFO, 0x28) // Provides you the ability to turn on and turn off the FIFO functionality.
++    FIELD(FIFO, RXFIFOSIZE, 0, 3) // Receive FIFO Buffer Depth
++    FIELD(FIFO, RXFE, 3, 1) // Receive FIFO Enable
++    FIELD(FIFO, TXFIFOSIZE, 4, 3) // Transmit FIFO Buffer Depth
++    FIELD(FIFO, TXFE, 7, 1) // Transmit FIFO Enable
++    FIELD(FIFO, RXUFE, 8, 1) // Receive FIFO Underflow Interrupt Enable
++    FIELD(FIFO, TXOFE, 9, 1) // Transmit FIFO Overflow Interrupt Enable
++    FIELD(FIFO, RXFLUSH, 14, 1) // Receive FIFO Flush
++    FIELD(FIFO, TXFLUSH, 15, 1) // Transmit FIFO Flush
++    FIELD(FIFO, RXUF, 16, 1) // Receiver FIFO Underflow Flag
++    FIELD(FIFO, TXOF, 17, 1) // Transmitter FIFO Overflow Flag
++    FIELD(FIFO, RXEMPT, 22, 1) // Receive FIFO Or Buffer Empty
++    FIELD(FIFO, TXEMPT, 23, 1) // Transmit FIFO Or Buffer Empty
++REG32(WATER, 0x2C) // Provides the ability to set a programmable threshold for notification, or sets the programmable thresholds to indicate that transmit data can be written or receive data can be read.
++    FIELD(WATER, TXWATER, 0, 4) // Transmit Watermark
++    FIELD(WATER, TXWATER_SHORT, 0, 2) // Transmit Watermark
++    FIELD(WATER, TXCOUNT, 8, 5) // Transmit Counter
++    FIELD(WATER, RXWATER, 16, 4) // Receive Watermark
++    FIELD(WATER, RXWATER_SHORT, 16, 2) // Receive Watermark
++    FIELD(WATER, RXCOUNT, 24, 5) // Receive Counter
 +
++// Update the configuration of the UART
 +static void lpuart_update_parameters(S32K358LPUART *s)
 +{
 +    QEMUSerialSetParams ssp;
@@ -379,15 +356,17 @@ index 0000000000..b4ea414875
 +        ssp.stop_bits = 2;
 +
 +    // Configure the baud rate
-+    // Computation at page 4618: baud_rate = clock / ((OSR+1) * SBR)
++    // Computation at page 4618 of the reference manual: baud_rate = clock / ((OSR+1) * SBR)
 +    if ((s->baud & R_BAUD_SBR_MASK))
 +        ssp.speed = s->pclk_frq / ((((s->baud & R_BAUD_OSR_MASK) >> R_BAUD_OSR_SHIFT) + 1) * (s->baud & R_BAUD_SBR_MASK));
 +    else
 +        ssp.speed = s->pclk_frq;
 +
++    //  Issue a device specific ioctl to a backend.  This function is thread-safe.
 +    qemu_chr_fe_ioctl(&s->chr, CHR_IOCTL_SERIAL_SET_PARAMS, &ssp);
 +}
 +
++// Check if the FIFO level is higher, equal or lower than the watermark and update the flags
 +static void lpuart_update_watermark(S32K358LPUART *s)
 +{
 +    if (s->tx_fifo_written > s->tx_fifo_watermark)
@@ -401,6 +380,7 @@ index 0000000000..b4ea414875
 +        s->stat &= ~R_STAT_RDRF_MASK;
 +}
 +
++// Set the IRQ if necessary
 +static void lpuart_update_irq(S32K358LPUART *s)
 +{
 +    if (((s->ctrl & R_CTRL_TIE_MASK) && (s->stat & R_STAT_TDRE_MASK)) || // there is room in the transmit FIFO to write another transmit character to Data
@@ -471,6 +451,7 @@ index 0000000000..b4ea414875
 +        return;
 +    }
 +
++    // Copy the buffer into the receive fifo
 +    memcpy(s->rx_fifo + s->rx_fifo_written, buf, 1);
 +    s->rx_fifo_written++;
 +    // the receive fifo is no more empty
@@ -481,24 +462,30 @@ index 0000000000..b4ea414875
 +}
 +
 +static void lpuart_read_rx_fifo(S32K358LPUART *s) {
++    /* We tried to read from an empty receive FIFO:
++     * set the underflow flag and return
++     */
++
 +    if (s->rx_fifo_written == 0) {
 +        s->fifo |= R_FIFO_RXUF_MASK;
 +        lpuart_update_irq(s);
 +        return;
 +    }
 +
++    // Copy the first byte from the receive FIFO to the data register (to be read by the user application)
 +    s->data &= ~R_DATA_R07T07_MASK;
 +    s->data |= s->rx_fifo[0];
 +    s->rx_fifo_written--;
 +    if (s->rx_fifo_written == 0)
 +        s->fifo |= R_FIFO_RXEMPT_MASK;
-+    else
++    else // Update the fifo
 +        memmove(s->rx_fifo, s->rx_fifo + 1, s->rx_fifo_written);
 +
 +    lpuart_update_watermark(s);
 +    lpuart_update_irq(s);
 +}
 +
++// Return the value of the requested register
 +static uint64_t lpuart_read(void *opaque, hwaddr offset, unsigned size)
 +{
 +    S32K358LPUART *s = S32K358_LPUART(opaque);
@@ -545,14 +532,14 @@ index 0000000000..b4ea414875
 +}
 +
 +/* Try to send tx data, and arrange to be called back later if
-+ * we can't (ie the char backend is busy/blocking).
++ * we can't (i.e., the char backend is busy/blocking).
 + */
 +static gboolean lpuart_transmit(void *do_not_use, GIOCondition cond, void *opaque)
 +{
 +    S32K358LPUART *s = S32K358_LPUART(opaque);
 +    int ret;
 +
-+    /* instant drain the fifo when there's no back-end */
++    // instant drain the FIFO when there's no back-end
 +    if (!qemu_chr_fe_backend_connected(&s->chr)) {
 +        s->tx_fifo_written = 0;
 +        return G_SOURCE_REMOVE;
@@ -568,7 +555,7 @@ index 0000000000..b4ea414875
 +        return G_SOURCE_REMOVE;
 +    }
 +
-+    // Transmission from front-end to back-enc
++    // Transmission from front-end to back-end
 +    ret = qemu_chr_fe_write(&s->chr, s->tx_fifo, s->tx_fifo_written);
 +
 +    // Update the number of elements in the fifo and shift the fifo
@@ -626,16 +613,18 @@ index 0000000000..b4ea414875
 +
 +    lpuart_update_watermark(s);
 +    lpuart_update_irq(s);
-+    // Transmit
++    // Transmit the data contained in the transmit FIFO
 +    lpuart_transmit(NULL, G_IO_OUT, s);
 +}
 +
++// Write to the UART registers
 +static void lpuart_write(void *opaque, hwaddr offset, uint64_t value,
 +                       unsigned size)
 +{
 +    S32K358LPUART *s = S32K358_LPUART(opaque);
 +    uint8_t osr;
 +
++    //  The reset takes effect immediately and remains asserted until you negate it.
 +    if (s->global & R_GLOBAL_RST_MASK) {
 +                qemu_log_mask(LOG_GUEST_ERROR,
 +                          "S32K358 LPUART: reset is active\n");
@@ -664,7 +653,7 @@ index 0000000000..b4ea414875
 +        if (value) {
 +            lpuart_reset((DeviceState *)s);
 +        }
-+
++        // Set again the global value (in case it has been reset)
 +        s->global = value;
 +        break;
 +
@@ -833,7 +822,7 @@ index 0000000000..b4ea414875
 +{
 +    SysBusDevice *sbd = SYS_BUS_DEVICE(obj);
 +    S32K358LPUART *s = S32K358_LPUART(obj);
-+
++    // Memory map the device and connect the IRQ
 +    memory_region_init_io(&s->iomem, obj, &lpuart_ops, s, "uart", 0x0800);
 +    sysbus_init_mmio(sbd, &s->iomem);
 +    sysbus_init_irq(sbd, &s->uartint);
@@ -848,12 +837,13 @@ index 0000000000..b4ea414875
 +        return;
 +    }
 +
-+    /* Flow control not implemented
-+     */
++    // Flow control not implemented
++    // Handlers to allow the UART work in the receive direction
 +    qemu_chr_fe_set_handlers(&s->chr, lpuart_can_receive, lpuart_receive,
 +                             NULL, NULL, s, NULL, true);
 +}
 +
++// To recover after a problem
 +static int lpuart_post_load(void *opaque, int version_id)
 +{
 +    S32K358LPUART *s = S32K358_LPUART(opaque);
@@ -863,6 +853,7 @@ index 0000000000..b4ea414875
 +    return 0;
 +}
 +
++// To make the device snapshoptable: it is not fully implemented
 +static const VMStateDescription lpuart_vmstate = {
 +    .name = "s32k358-lpuart",
 +    .version_id = 1,
@@ -920,7 +911,7 @@ index 61fbb62b65..a311e189ba 100644
 --- a/hw/timer/Kconfig
 +++ b/hw/timer/Kconfig
 @@ -56,3 +56,7 @@ config STELLARIS_GPTM
- 
+
  config AVR_TIMER16
      bool
 +
@@ -933,15 +924,15 @@ index 80427852e0..45b85dbdf6 100644
 +++ b/hw/timer/meson.build
 @@ -37,3 +37,4 @@ specific_ss.add(when: 'CONFIG_IBEX', if_true: files('ibex_timer.c'))
  system_ss.add(when: 'CONFIG_SIFIVE_PWM', if_true: files('sifive_pwm.c'))
- 
+
  specific_ss.add(when: 'CONFIG_AVR_TIMER16', if_true: files('avr_timer16.c'))
 +specific_ss.add(when: 'CONFIG_S32K358_TIMER', if_true: files('s32k358_timer.c'))
 diff --git a/hw/timer/s32k358_timer.c b/hw/timer/s32k358_timer.c
 new file mode 100644
-index 0000000000..2cf284a788
+index 0000000000..0d2b7eeb0d
 --- /dev/null
 +++ b/hw/timer/s32k358_timer.c
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,364 @@
 +/*
 + *  s32k358 PIT timer emulation
 + *
@@ -1306,13 +1297,12 @@ index 0000000000..2cf284a788
 +}
 +
 +type_init(s32k358_timer_register_types);
-+
 diff --git a/include/hw/char/s32k358_uart.h b/include/hw/char/s32k358_uart.h
 new file mode 100644
-index 0000000000..90297b4a6d
+index 0000000000..012e5f25fa
 --- /dev/null
 +++ b/include/hw/char/s32k358_uart.h
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,59 @@
 +/*
 + * S32K358 LPUART emulation
 + *
@@ -1331,6 +1321,7 @@ index 0000000000..90297b4a6d
 +#define TYPE_S32K358_LPUART "s32k358_lpuart"
 +OBJECT_DECLARE_SIMPLE_TYPE(S32K358LPUART, S32K358_LPUART)
 +
++// The first two LPUART support bigger FIFO
 +#define S32K358_LPUART_0_1_RX_FIFO_SIZE           16
 +#define S32K358_LPUART_0_1_TX_FIFO_SIZE           16
 +#define S32K358_LPUART_2_15_RX_FIFO_SIZE           4
@@ -1341,9 +1332,9 @@ index 0000000000..90297b4a6d
 +    SysBusDevice parent_obj;
 +
 +    /*< public >*/
-+    MemoryRegion iomem;
++    MemoryRegion iomem; // memory region for the memory mapping
 +    CharBackend chr;
-+    qemu_irq uartint;
++    qemu_irq uartint; // IRQ number
 +    guint watch_tag;
 +
 +    uint32_t id;
@@ -1373,10 +1364,10 @@ index 0000000000..90297b4a6d
 +#endif
 diff --git a/include/hw/timer/s32k358_timer.h b/include/hw/timer/s32k358_timer.h
 new file mode 100644
-index 0000000000..eb7c8b0a08
+index 0000000000..82f20f5190
 --- /dev/null
 +++ b/include/hw/timer/s32k358_timer.h
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,51 @@
 +/*
 + *  s32k358 PIT timer emulation
 + *
@@ -1428,4 +1419,3 @@ index 0000000000..eb7c8b0a08
 +};
 +
 +#endif
-+

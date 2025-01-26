@@ -13,24 +13,16 @@
 #include "qemu/error-report.h" // error reporting
 #include "hw/arm/boot.h" // ARM kernel loader.
 #include "hw/arm/armv7m.h" // ARMv7M CPU object
-#include "hw/or-irq.h" // for interrupt reqest
 #include "hw/boards.h" //  Declarations for use by board files for creating devices (e.g machine_type_name)
 #include "exec/address-spaces.h" //  Internal memory management interfaces
 #include "sysemu/sysemu.h" // Misc. things related to the system emulator.
 #include "hw/qdev-properties.h" // Define device properties
 #include "hw/misc/unimp.h" // create_unimplemented_device
-#include "hw/char/s32k358_uart.h"
-#include "hw/misc/mps2-scc.h" // ARM MPS2 SCC emulation
-#include "hw/misc/mps2-fpgaio.h" // ARM MPS2 FPGAIO emulation
-#include "hw/ssi/pl022.h" // Arm PrimeCell PL022 Synchronous Serial Port
-#include "hw/i2c/arm_sbcon_i2c.h" // ARM Versatile I2C controller
-#include "hw/net/lan9118.h" // SMSC LAN9118 Ethernet interface emulation
-#include "net/net.h" // Net configurations (clients, sockets,...)
-#include "hw/watchdog/cmsdk-apb-watchdog.h" // This is a model of the "APB watchdog" which is part of the Cortex-M System Design Kit
 #include "hw/qdev-clock.h" // Device's clock input and output
 #include "qapi/qmp/qlist.h" // QList Module (provides dynamic arrays)
 #include "qom/object.h" // QEMU Object Model
-#include "hw/timer/s32k358_timer.h"
+#include "hw/char/s32k358_uart.h" // LPUART s32k358
+#include "hw/timer/s32k358_timer.h" // PIT s32k358
 
 // Data types representing the machine
 struct S32K358MachineClass {
