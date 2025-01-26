@@ -100,3 +100,8 @@ git clone https://github.com/FreeRTOS/FreeRTOS.git --recurse-submodules
 At this point, we can try to run the demo application (`Demo` folder). Compile the code with the NXP toolchain by typing `make` and then `make qemu_start` to launch the application. Try to type something and press enter to experience the LPUART receive functionality!
 
 **Remember to put the correct directory for your FreeRTOS folder in the Makefile.**
+
+## Copyright
+This project is distributed under the CC-BY_NC 4.0 - copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
+
+You can view additional details on [this page](https://creativecommons.org/licenses/by-nc/4.0/).
