@@ -1,24 +1,24 @@
 # CAOS project: QEMU emulation of NXP S32K3X8EVB
 ## QEMU Overview
-QEMU is an emulator that allows programs written for one microprocessor to be emulated and run on a host running a different microporcessor.
+QEMU is an emulator that allows programs written for one microprocessor to be emulated and run on a host running a different microprocessor.
 
 Central to the working of QEMU is the QEMU Object Model or QOM. Every device is represented in the QOM in an object-oriented way. In particular, when creating a new type (e.g., a new machine) we need to register it with QOM.
 
-Because C doesn't naturally represent object oriented systems there's a lot of moving parts in the QEMU C implementation to make this work. Fortunately, many macros are provided to make it more straightforward. Furthermore, classes are represented as structs.
+Because C doesn't naturally represent object-oriented systems there's a lot of moving parts in the QEMU C implementation to make this work. Fortunately, many macros are provided to make it more straightforward. Furthermore, classes are represented as structs.
 
 QOM uses two parallel class hierarchies that split the needed features:
-- Structs deriving from Object are DeviceState and will contain per-instance information
-- Structs deriving from ObjectClass are DeviceClass and will have per-class information.
+- Structs deriving from Object are DeviceState and contain per-instance information
+- Structs deriving from ObjectClass are DeviceClass and have per-class information.
 
 To tell QOM how to create objects we need to create a static instance of TypeInfo for the type and then register it. The init function will create instances of the objects.
 
 Peripherals are attached to the specific memory bus and generate the appropriate interrupt to notify HW events, using the correct IRQ lines. Peripheral registers are accessible through the memory bus.
 
 ## NXP S32K3X8EVB board
-NXP S32K3X8EVB board is based on the 32-bit Arm®Cortex®-M7 S32K358 MCU ([NXP website](https://www.nxp.com/design/design-center/development-boards-and-designs/S32K3X8EVB-Q289)). The Arm Cortex-M7 processor is the highest-performing processor in the Cortex-M family that enables the design of sophisticated MCUs and SoCs. The executing frequency can be at most 240 MHz, depending on the actual clocking mode. Anyway, it does not match real time, since its advancement speed depends on how fast host CPU runs guest instructions. For simplicity, we use 24 MHz as clock frequency both for the board and the peripherals, since we found this value in an official FreeRTOS demo of the board.
+The NXP S32K3X8EVB board is based on the 32-bit Arm®Cortex®-M7 S32K358 MCU ([NXP website](https://www.nxp.com/design/design-center/development-boards-and-designs/S32K3X8EVB-Q289)). The Arm Cortex-M7 processor is the highest-performing processor in the Cortex-M family that enables the design of sophisticated MCUs and SoCs. The executing frequency can be at most 240 MHz, depending on the actual clocking mode. Anyway, it does not match real time, since its advancement speed depends on how fast host CPU runs guest instructions. For simplicity, we use 24 MHz as clock frequency both for the board and the peripherals, since we found this value in an official FreeRTOS demo of the board.
 
 ### Memory regions
-The S32K3 Memories Guide Application note describes the memory features included in the board. The following images are taken from that document.
+The [S32K3 Memories Guide Application note](docs/AN13388.pdf) describes the memory features included in the board. The following images are taken from that document.
 
 ![Memory regions flash](img/flash.png)
 ![Memory regions ram](img/ram.png)
@@ -30,12 +30,12 @@ In particular, it supports:
 - 256 KB of data TCM (low-latency memory that can be used by the processor), divided into two blocks
 - 128 KB of instruction TCM, divided into two blocks
 
-Instruction TCM can be used to hold critical routines, such as interrupt handling routines or real-time tasks where the indeterminacy of a cache would be highly undesirable. The interrupt vector table is stored in ITCM0, located at 0x0 (while the NOR flash is at 0x400000). When the processor is powered on, the reset is the first operation executed. The kernel, instead, is loaded in the NOR flash.
+Instruction TCM can be used to hold critical routines, such as interrupt handling routines or real-time tasks where the indeterminacy of a cache would be highly undesirable. The interrupt vector table is stored in ITCM0, located at 0x0 (while the NOR flash memory is at 0x400000). When the processor is powered on, the reset is the first operation executed. The kernel, instead, is loaded in the NOR flash memory.
 
 The optional MPU has configurable attributes for memory protection. It includes up to 16 memory regions and sub region disable (SRD), enabling efficient use of memory regions. It also has the ability to enable a background region that implements the default memory map attributes.
 
 ### Device tree
-ARM architecture uses the device tree to specify connected device on memory bus. Beyond the memories already described, the board has 16 LPUART and three periodic interrupt timers that will be described in the next sections. The memory mapping is fully described by the S32K3xx_memory_map.xlsx file.
+ARM architecture uses the device tree to specify connected device on memory bus. Beyond the memories already described, the board has 16 LPUART and three periodic interrupt timers that will be described in the next sections. The memory mapping is fully described by the [S32K3xx_memory_map.xlsx](docs/S32K3xx_memory_map.xlsx) file.
 
 ```
     0000000000000000-000000000000ffff (prio 0, ram): s32k358.itcm0
@@ -71,7 +71,7 @@ ARM architecture uses the device tree to specify connected device on memory bus.
 ```
 
 ### Interrups
-The NVIC is closely integrated with the core to achieve low-latency interrupt processing. It presents external interrupts, configurable from 1 to 240. The configured IRQs (fully described in S32K3xx_interrupt_map.xlsx) are the followings:
+The NVIC is closely integrated with the core to achieve low-latency interrupt processing. It presents external interrupts, configurable from 1 to 240. The configured IRQs (fully described in [S32K3xx_interrupt_map.xlsx](docs/S32K3xx_interrupt_map.xlsx)) are the followings:
 - from 141 to 156 for the LPUARTs
 - 96, 97 and 98 for the PIT timers
 
@@ -84,29 +84,30 @@ The implemented registers (and thus configurable parameters) are:
 - global: performs global functions, triggering the reset of the registers.
 - baud: configures the baud rate.
 - status: provides the module status (e.g. whether the transmit FIFO level is greater than, equal to, or less than the watermark, the transmission is completed or the receive FIFO level is less than, equal to, or greater than the watermark).
-- control: controls various optional features of the LPUART system (whether the transmitter/receiver and their interrupts are enabled and the parity bit is included).
+- control: controls various optional features of the LPUART system (e.g., whether the transmitter/receiver and their interrupts are enabled and the parity bit is included).
 - data: byte to be read from the receive FIFO or to be written to the transmit FIFO.
-- fifo: provides you the ability to turn on and turn off the FIFO functionality.
+- fifo: provides you the ability to turn on and off the FIFO functionality.
 - watermark: provides the ability to set a programmable threshold for notification, or sets the programmable thresholds to indicate that transmit data can be written or receive data can be read.
 
-Depending on the instances, the FIFO can be of 16B or 4B; if the FIFO is disabled it is as if there was a FIFO of one byte. Our LPUART implementation does not support a number of characters different from 8 bits.
+Depending on the instances, the FIFO can be of 16 B or 4 B; if the FIFO is disabled it is as if there was a FIFO of one byte. Our LPUART implementation does not support character sizes different from 8 bits.
 
 ### Transmit
 The user application writes data into the data register. If the transmitter is enabled and there is enough space in the transmit FIFO the byte is copied into it, otherwise the overflow flag is set. Then, the transmitter is set to active and the FIFO is no more empty. If there is no backend connected, the transmission cannot take place. Otherwise, data will be sent from the front end to the back end. If something goes wrong and there is still something in the FIFO after the transmission, we try to retransmit. Otherwise, the transmission is set as completed and the FIFO as empty. At every step we check whether the IRQ or the watermark register must be updated.
 
 ### Receive
-In this case, when the user tries to read the data register, we check whether the receive FIFO contains some data, otherwise we set the underflow flag. Then, the first byte is copied from the receive FIFO int the data register. An interrupt can be triggered when something is written into the receive FIFO, in order to inform the user application that data can be read.
+In this case, when the user tries to read the data register, we check whether the receive FIFO contains some data, otherwise we set the underflow flag. Then, the first byte is copied from the receive FIFO to the data register. An interrupt can be triggered when something is written into the receive FIFO, in order to inform the user application that data can be read.
 
 ## Periodic Interrupt Timers (PIT)
-This chip has three instances of the PIT each with 4 PIT timers/channels, each channel being 32 bits in length. They are clocked by AIPS_SLOW_CLK (up to 60 MHz). We do not model the RTI, the Lifetime Timer and Timer chaining. When the timer is enabled, it counts down from its initial value to zero. When it expires it sets the Timer Interrupt Flag. If the timer interrupt is enabled and the Timer Interrupt Flag is set, it generates an interrupt. The timer cannot generate a new interrupt until you clear the flag from the previous interrupt. It then reloads the timer start value and starts
+This board has three instances of the PIT, each composed of 4 PIT timers/channels. Each channel is 32 bits in length. They are clocked by AIPS_SLOW_CLK (up to 60 MHz). We do not model the RTI, the Lifetime Timer and Timer chaining. When the timer is enabled, it counts down from its initial value to zero. When it expires it sets the Timer Interrupt Flag. If the timer interrupt is enabled and the Timer Interrupt Flag is set, it generates an interrupt. The interrupt remains set until you explicitly clear the flag. It then reloads the timer start value and starts
 the timer counting down again. The interrupt line is shared by all the channels of the same PIT. To change the counter period of a running timer, we specify a new start value: the next time the timer expires, it loads the new start value. The whole description can be found in the reference manual of the board (from page 2808).
 
 The implemented registers (and thus configurable parameters) are:
-- PIT Module Control: Enables the PIT timer clocks and specifies the behavior of the timers when PIT enters Debug mode.
+- PIT Module Control: enables the PIT timer and specifies the behavior of the timers when PIT enters Debug mode.
 - Timer Load Value: specifies the length of the timeout period in clock cycles for the relative channel.
 - Current Timer Value (read-only): indicates the current timer value.
-- Timer Control: controls timer behavior (timer enable and interrupt enable).
+- Timer Control: controls timer behavior (e.g., timer enable and interrupt enable).
 - Timer Flag: indicates the PIT timer has expired.
+
 Note that while the PIT Module Control is unique for the whole PIT, there is an instance for each channel of the other registers.
 
 ## FreeRTOS demo application
@@ -118,8 +119,8 @@ In particular, we will demonstate the usage of three timers (PIT0 channels 0 and
 In the main file four tasks are created:
 - TaskA: when timer 0 channel 0 expires, the task prints the current value of the other two timers.
 - TaskB: when timer 0 channel 1 expires, the task changes the period of timer 1 channel 0 (halves or doubles the value).
-- TaskC: when timer 1 channel 0 expires, the task prints the number of times in which it expired.
-- TaskD: when the user types a sentence followed by a new line, the task prints what the user just wrote.
+- TaskC: when timer 1 channel 0 expires, the task prints the number of times it expired.
+- TaskD: when the user types a sentence followed by enter, the task prints what the user just wrote.
 
 The tasks are unblocked by semaphores, that are given by the interrupt service routines handling the different interrupts.
 
@@ -147,8 +148,8 @@ And it is memory mapped at the corresponding address:
 #define S32K358_UART0       ((S32K358_UART_Typedef  *) UART_0_BASE_ADDRESS  )
 ```
 The implemented functions are:
-- `UART_init`: initializes the peripheral, enabling the receive and transmit FIFO, setting as watermark the FIFO length-1, and enabling transmitter, the receiver and receiver interrupt.
-- `vUart0Handler`: the handler for the interrupt generated when the user writes something. It keeps collecting characters until the FIFO is full / the user pressed enter. At that point temporary disables the IRQ and wakes up TaskD.
+- `UART_init`: initializes the peripheral, enabling the receive and transmit FIFO, setting as watermark the FIFO length-1, and enabling transmitter, receiver and receiver interrupt.
+- `vUart0Handler`: the handler for the interrupt generated when the user writes something. It keeps collecting characters in a buffer until the buffer is full / the user pressed enter. At that point temporary disables the IRQ and wakes up TaskD.
 - `UART_getRxBuffer`: reads from the buffer and enables again the IRQ.
 - `UART_printf`: prints the string passed as parameter.
 

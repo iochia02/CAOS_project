@@ -1,11 +1,11 @@
 # CAOS project: QEMU emulation of NXP S32K3X8EVB
-This project was developed by Chiara Iorio, Sara Braidotti and Matteo Pani during the Computer Architectures and Operation Systems course of the Master's degree in Cybersecurity at Politecnico di Torino.
+This project was developed by Chiara Iorio, Sara Braidotti and Matteo Pani during the Computer Architectures and Operating Systems course of the Master's degree in Cybersecurity at Politecnico di Torino.
 
 The goal of this project is to emulate the NXP S32K3X8EVB board, based on the 32-bit Arm®Cortex®-M7 S32K358 MCU ([NXP website](https://www.nxp.com/design/design-center/development-boards-and-designs/S32K3X8EVB-Q289)).
 
 To generate a custom QEMU version to emulate this board (its CPU, memory map, UART and timers) please refer to the following steps.
 
-To read the whole documentation of the project refer [click here](documentation.md). The references and the description of the files in the `docs`folder can be found [here](references.md).
+To read the whole documentation of the project [click here](documentation.md). The references and the description of the files in the `docs`folder can be found [here](references.md).
 
 ## Preparing the environment
 First of all, you need to install git and some other dependencies. For the list of the necessary dependencies look at the [official Qemu documentation](https://wiki.qemu.org/Hosts/Linux). Then we get the code from the QEMU's GitHub repository, checkout to a stable branch and check if the build configuration works correctly:
@@ -32,7 +32,7 @@ cd qemu
 git apply < qemu.patch
 ```
 
-Otherwise, you can manually add the board by following the subsequent steps. The source files can be found in the `src`folder.
+Otherwise, you can manually add the board by following the subsequent steps. The source files can be found in the `src` folder.
 
 ### S32K358 MCU
 1. Go to directory `qemu/hw/arm`
