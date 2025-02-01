@@ -1,5 +1,13 @@
-#ifndef __PRINTF__
-#define __PRINTF__
+/*
+ * FreeRTOS application s32k358 lpuart.
+ *
+ * SPDX-License-Identifier: CC-BY-NC-4.0
+ * Copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
+ *
+ */
+
+#ifndef __UART__
+#define __UART__
 
 #include "FreeRTOS.h"
 

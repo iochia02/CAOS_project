@@ -1,3 +1,11 @@
+/*
+ * FreeRTOS application s32k358 lpuart.
+ *
+ * SPDX-License-Identifier: CC-BY-NC-4.0
+ * Copyright (c) 2025 Braidotti Sara, Iorio Chiara, Pani Matteo.
+ *
+ */
+
 #include "uart.h"
 #include "nvic.h"
 #include "semphr.h"
