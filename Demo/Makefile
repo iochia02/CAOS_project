@@ -51,7 +51,7 @@ CFLAGS = $(INCLUDE_DIRS)
 # Don't include standard libraries
 CFLAGS += -ffreestanding
 
-# Target ARM cortex M3 processor
+# Target ARM cortex M7 processor
 CFLAGS += -mcpu=$(CPU)
 # Use the thumb 16 bits instruction set. Required for cortex-M
 CFLAGS += -mthumb
@@ -99,7 +99,7 @@ LDFLAGS += -Xlinker -Map=$(MAP)
 # optimized memory. Pass option to the linker (-Xlinker)
 LDFLAGS += -Xlinker --gc-sections
 
-# Link specifically for cortex M3 and thumb instruction set
+# Link specifically for cortex M7 and thumb instruction set
 LDFLAGS += -mcpu=$(CPU) -mthumb
 
 # Enable hw floating point (necessary for arm cortex m7)

@@ -49,25 +49,25 @@ ARM architecture uses the device tree to specify connected device on memory bus.
     0000000020400000-000000002043ffff (prio 0, ram): s32k358.sram0
     0000000020440000-000000002047ffff (prio 0, ram): s32k358.sram1
     0000000020480000-00000000204bffff (prio 0, ram): s32k358.sram2
-    00000000400b0000-00000000400b013f (prio 0, i/o): s32k358-timer
-    00000000400b4000-00000000400b413f (prio 0, i/o): s32k358-timer
-    00000000402fc000-00000000402fc13f (prio 0, i/o): s32k358-timer
-    0000000040328000-00000000403287ff (prio 0, i/o): uart
-    000000004032c000-000000004032c7ff (prio 0, i/o): uart
-    0000000040330000-00000000403307ff (prio 0, i/o): uart
-    0000000040334000-00000000403347ff (prio 0, i/o): uart
-    0000000040338000-00000000403387ff (prio 0, i/o): uart
-    000000004033c000-000000004033c7ff (prio 0, i/o): uart
-    0000000040340000-00000000403407ff (prio 0, i/o): uart
-    0000000040344000-00000000403447ff (prio 0, i/o): uart
-    000000004048c000-000000004048c7ff (prio 0, i/o): uart
-    0000000040490000-00000000404907ff (prio 0, i/o): uart
-    0000000040494000-00000000404947ff (prio 0, i/o): uart
-    0000000040498000-00000000404987ff (prio 0, i/o): uart
-    000000004049c000-000000004049c7ff (prio 0, i/o): uart
-    00000000404a0000-00000000404a07ff (prio 0, i/o): uart
-    00000000404a4000-00000000404a47ff (prio 0, i/o): uart
-    00000000404a8000-00000000404a87ff (prio 0, i/o): uart
+    00000000400b0000-00000000400b013f (prio 0, i/o): s32k358-timer0
+    00000000400b4000-00000000400b413f (prio 0, i/o): s32k358-timer1
+    00000000402fc000-00000000402fc13f (prio 0, i/o): s32k358-timer2
+    0000000040328000-00000000403287ff (prio 0, i/o): uart0
+    000000004032c000-000000004032c7ff (prio 0, i/o): uart1
+    0000000040330000-00000000403307ff (prio 0, i/o): uart2
+    0000000040334000-00000000403347ff (prio 0, i/o): uart3
+    0000000040338000-00000000403387ff (prio 0, i/o): uart4
+    000000004033c000-000000004033c7ff (prio 0, i/o): uart5
+    0000000040340000-00000000403407ff (prio 0, i/o): uart6
+    0000000040344000-00000000403447ff (prio 0, i/o): uart7
+    000000004048c000-000000004048c7ff (prio 0, i/o): uart8
+    0000000040490000-00000000404907ff (prio 0, i/o): uart9
+    0000000040494000-00000000404947ff (prio 0, i/o): uart10
+    0000000040498000-00000000404987ff (prio 0, i/o): uart11
+    000000004049c000-000000004049c7ff (prio 0, i/o): uart12
+    00000000404a0000-00000000404a07ff (prio 0, i/o): uart13
+    00000000404a4000-00000000404a47ff (prio 0, i/o): uart14
+    00000000404a8000-00000000404a87ff (prio 0, i/o): uart15
 ```
 
 ### Interrups
@@ -92,9 +92,33 @@ The implemented registers (and thus configurable parameters) are:
 Depending on the instances, the FIFO can be of 16 B or 4 B; if the FIFO is disabled it is as if there was a FIFO of one byte. Our LPUART implementation does not support character sizes different from 8 bits.
 
 ### Transmit
+```
+USER APPLICATION WRITES 1 BYTE
+              │
+              │
+              ▼                 copy into                                                      transmit
+  ┌───────────────────────┐                      ┌────────┐                ┌────────────────┐
+  │  DATA REGISTER [0:7]  ├───────────────────►  │  FIFO  ├───────────────►│ SHIFT REGISTER ├─────────────►
+  └───────────────────────┘                      └────────┘                └────────────────┘
+                              if there is
+                             space available   FIFO disabled =
+                                               FIFO 1 BYTE
+```
 The user application writes data into the data register. If the transmitter is enabled and there is enough space in the transmit FIFO the byte is copied into it, otherwise the overflow flag is set. Then, the transmitter is set to active and the FIFO is no more empty. If there is no backend connected, the transmission cannot take place. Otherwise, data will be sent from the front end to the back end. If something goes wrong and there is still something in the FIFO after the transmission, we try to retransmit. Otherwise, the transmission is set as completed and the FIFO as empty. At every step we check whether the IRQ or the watermark register must be updated.
 
 ### Receive
+```
+USER APPLICATION READS 1 BYTE
+              ▲
+              │
+              │                 copy into                     copy into                         receive
+  ┌───────────┴───────────┐                      ┌────────┐                ┌────────────────┐
+  │  DATA REGISTER [0:7]  │◄─────────────────────┤  FIFO  │◄───────────────┤ SHIFT REGISTER │◄────────────
+  └───────────────────────┘                      └────────┘                └────────────────┘
+
+                                               FIFO disabled =
+                                               FIFO 1 BYTE
+```
 In this case, when the user tries to read the data register, we check whether the receive FIFO contains some data, otherwise we set the underflow flag. Then, the first byte is copied from the receive FIFO to the data register. An interrupt can be triggered when something is written into the receive FIFO, in order to inform the user application that data can be read.
 
 ## Periodic Interrupt Timers (PIT)
@@ -113,7 +137,7 @@ Note that while the PIT Module Control is unique for the whole PIT, there is an 
 ## FreeRTOS demo application
 FreeRTOS is a class of RTOS that is designed to be small enough to run on a microcontroller. We developed a demo application to show the functionality of the implemented board. Hence, the description of that application follows.
 
-In particular, we will demonstate the usage of three timers (PIT0 channels 0 and 1 and PIT1 channel 0) and LPUART0, both to write and to receive data.
+In particular, we will demonstrate the usage of three timers (PIT0 channels 0 and 1 and PIT1 channel 0) and LPUART0, both to write and to receive data.
 
 ### Main file
 In the main file four tasks are created:
@@ -196,6 +220,9 @@ The implemented functions are:
 - `xSetReload`: changes the value of the reload register (used by TaskB) after performing the appropriate checks.
 - `ulGetReload`: gets the value of the reload register after performing the appropriate checks.
 - `ulGetCount`: gets the value of the value register after performing the appropriate checks.
+
+### Output
+![Output](./img/output.gif)
 
 
 

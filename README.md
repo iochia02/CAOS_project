@@ -5,7 +5,7 @@ The goal of this project is to emulate the NXP S32K3X8EVB board, based on the 32
 
 To generate a custom QEMU version to emulate this board (its CPU, memory map, UART and timers) please refer to the following steps.
 
-To read the whole documentation of the project [click here](documentation.md). The references and the description of the files in the `docs`folder can be found [here](references.md).
+To read the whole documentation of the project [click here](documentation.md). The [presentation](presentation.md) is to be visualized with [patat](https://github.com/jaspervdj/patat/blob/main/README.md), a feature-rich presentation tool that runs in the terminal. The references and the description of the files in the `docs` folder can be found [here](references.md).
 
 ## Preparing the environment
 First of all, you need to install git and some other dependencies. For the list of the necessary dependencies look at the [official Qemu documentation](https://wiki.qemu.org/Hosts/Linux). Then we get the code from the QEMU's GitHub repository, checkout to a stable branch and check if the build configuration works correctly:
@@ -81,6 +81,55 @@ config S32K358_TIMER
 specific_ss.add(when: 'CONFIG_S32K358_TIMER', if_true: files('s32k358_timer.c'))
 ```
 5. Go to `qemu/include/hw/timer/` and copy the file `s32k358_timer.h`
+
+### Diagram of the modified files tree
+
+```
+                   ┌─────────────┐  add    ┌────────────────────────────────────────────────────────────────┐
+qemu/hw/        ┌──┤ meson.build ├─────────┤ arm_ss.add(when: 'CONFIG_S32K358', if_true: files('s32k358.c'))│
+                │  └─────────────┘         └────────────────────────────────────────────────────────────────┘
+   │            │
+   │            │                          ┌─────────────────────────────┐
+   │   ./arm    │  ┌───────────┐           │  config S32K358             │
+   ├────────────┼──┤ s32k358.c │           │      bool                   │
+   │            │  └───────────┘           │      default y              │
+   │            │  ┌─────────┐      add    │      depends on TCG && ARM  │
+   │            └──│ Kconfig ├─────────────┤      select ARMSSE          │
+   │               └─────────┘             │      select UNIMP           │
+   │                                       │      select S32K358_TIMER   │
+   │                                       │      select S32K358_UART    │
+   │                                       └─────────────────────────────┘
+   │   ./char
+   │                ┌────────────────┐
+   ├────────────┬───┤ s32k358_uart.c │
+   │            │   └────────────────┘     ┌───────────────────────────┐
+   │            │   ┌─────────┐       add  │  config S32K358_UART      │
+   │            ├───┤ Kconfig ├────────────┤      bool                 │
+   │            │   └─────────┘            └───────────────────────────┘
+   │            │   ┌─────────────┐   add  ┌───────────────────────────────────────────────────────────────────────────────┐
+   │            └───┤ meson.build ├────────┤ specific_ss.add(when:F'CONFIG_S32K358_UART',fif_true:2files('s32k358_uart.c'))│
+   │                └─────────────┘        └───────────────────────────────────────────────────────────────────────────────┘
+   │   ./timer
+   │                ┌────────────────┐
+   └────────────┬───┤ s32k358_timer.c│     ┌───────────────────────────┐
+                │   └────────────────┘     │  config S32K358_TIMER     │
+                │   ┌─────────┐       add  │      bool                 │
+                ├───┤ Kconfig ├────────────┤      select PTIMER        │
+                │   └─────────┘            └───────────────────────────┘
+                │   ┌─────────────┐   add  ┌─────────────────────────────────────────────────────────────────────────────────┐
+                └───┤ meson.build ├────────┤ specific_ss.add(when:F'CONFIG_S32K358_TIMER',fif_true:2files('s32k358_timer.c)) │
+                    └─────────────┘        └─────────────────────────────────────────────────────────────────────────────────┘
+
+qemu/include/hw/
+
+   │    ./char      ┌────────────────┐
+   ├────────────────┤ s32k358_uart.h │
+   │                └────────────────┘
+   │    ./timer     ┌────────────────┐
+   └────────────────┤ s32k358_timer.h│
+                    └────────────────┘
+```
+
 
 ## Recompile QEMU
 After adding the support for the new board, we need to recompile QEMU:
