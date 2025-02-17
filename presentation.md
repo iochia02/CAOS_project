@@ -22,7 +22,7 @@ patat:
 ...
 
 # The goal
-The project is composed by to main phases:
+The project is composed by two main phases:
 
 1. Generate a custom *QEMU* version to support the **NXP S32K3X8EVB board**:
     - CPU
