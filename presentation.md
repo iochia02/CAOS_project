@@ -64,7 +64,7 @@ The microcontroller includes:
 When the microcontroller is powered on:
 
 1. it reads the interrupt vector table stored in *ITCM0*, located at 0x0: it executes the reset;
-2. it loads the kernel from the address written in the reset vector (*NOR flash* memory).
+2. it loads the kernel from the address written in the reset handler (*NOR flash* memory).
 
 ---
 
