@@ -131,12 +131,12 @@ void vInitialiseTimers( void )
 
 uint32_t ulTimerOK( S32K358_TIMER_TypeDef * timer, S32K358_CHANNEL_TypeDef * channel ) {
 	if (timer->PIT_CTRL & 2) {
-		UART_printf("Timer not enabled\n");
+		UART_print("Timer not enabled\n");
 		return 0;
 	}
 	// Check if the channel is enabled
 	if (!(channel->CTRL & 1 )) {
-		UART_printf("Channel not enabled\n");
+		UART_print("Channel not enabled\n");
 		return 0;
 	}
 	return 1;
@@ -148,14 +148,14 @@ BaseType_t xSetReload( uint32_t n_timer, uint32_t n_channel, uint32_t value ) {
 	S32K358_TIMER_TypeDef * timer = tGetTimer(n_timer);
 	if (timer == NULL) {
 		snprintf(msg, 100, "Timer %ld does not exists; the board only supports three timers (0-2)\n", n_timer);
-		UART_printf(msg);
+		UART_print(msg);
 		return pdFALSE;
 	}
 
 	S32K358_CHANNEL_TypeDef * channel = cGetChannel(timer, n_channel);
 	if (channel == NULL) {
 		snprintf(msg, 100, "Channel %ld does not exists; the board only supports four channels (0-3)\n", n_channel);
-		UART_printf(msg);
+		UART_print(msg);
 		return pdFALSE;
 	}
 
@@ -173,14 +173,14 @@ uint32_t ulGetReload( uint32_t n_timer, uint32_t n_channel ) {
 	S32K358_TIMER_TypeDef * timer = tGetTimer(n_timer);
 	if (timer == NULL) {
 		snprintf(msg, 100, "Timer %ld does not exists; the board only supports three timers (0-2)\n", n_timer);
-		UART_printf(msg);
+		UART_print(msg);
 		return 0;
 	}
 
 	S32K358_CHANNEL_TypeDef * channel = cGetChannel(timer, n_channel);
 	if (channel == NULL) {
 		snprintf(msg, 100, "Channel %ld does not exists; the board only supports four channels (0-3)\n", n_channel);
-		UART_printf(msg);
+		UART_print(msg);
 		return 0;
 	}
 
@@ -197,14 +197,14 @@ uint32_t ulGetCount( uint32_t n_timer, uint32_t n_channel ) {
 	S32K358_TIMER_TypeDef * timer = tGetTimer(n_timer);
 	if (timer == NULL) {
 		snprintf(msg, 100, "Timer %ld does not exists; the board only supports three timers (0-2)\n", n_timer);
-		UART_printf(msg);
+		UART_print(msg);
 		return 0;
 	}
 
 	S32K358_CHANNEL_TypeDef * channel = cGetChannel(timer, n_channel);
 	if (channel == NULL) {
 		snprintf(msg, 100, "Channel %ld does not exists; the board only supports four channels (0-3)\n", n_channel);
-		UART_printf(msg);
+		UART_print(msg);
 		return 0;
 	}
 

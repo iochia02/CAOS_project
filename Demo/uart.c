@@ -65,7 +65,7 @@ void UART_init( void )
 	NVIC_EnableIRQ( UART0_IRQn );
 }
 
-void UART_printf(const char *s) {
+void UART_print(const char *s) {
     while(*s != '\0') {
         // Wait to have enough room in the transmit fifo
         while(!(S32K358_UART0->STAT & (1 << TDRE_SHIFT)));

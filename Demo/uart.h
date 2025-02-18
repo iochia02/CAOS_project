@@ -12,7 +12,7 @@
 #include "FreeRTOS.h"
 
 void UART_init(void);
-void UART_printf(const char *s);
+void UART_print(const char *s);
 void UART_getRxBuffer(char* usr_buf, uint32_t len);
 
 #endif

@@ -175,7 +175,7 @@ The implemented functions are:
 - `UART_init`: initializes the peripheral, enabling the receive and transmit FIFO, setting as watermark the FIFO length-1, and enabling transmitter, receiver and receiver interrupt.
 - `vUart0Handler`: the handler for the interrupt generated when the user writes something. It keeps collecting characters in a buffer until the buffer is full / the user pressed enter. At that point temporary disables the IRQ and wakes up TaskD.
 - `UART_getRxBuffer`: reads from the buffer and enables again the IRQ.
-- `UART_printf`: prints the string passed as parameter.
+- `UART_print`: prints the string passed as parameter.
 
 ### Timers
 A timer single channel is represented by the struct:
